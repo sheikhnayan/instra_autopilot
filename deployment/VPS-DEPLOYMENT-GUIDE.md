@@ -3,8 +3,28 @@
 ## 🚀 Quick Setup on VPS
 
 ### 1. Upload Files to VPS
+### If Instagram Posts Not Processing
 ```bash
-# Upload your project to VPS
+# Check if jobs are being created
+cd /var/www/instra_autopilot
+php artisan queue:monitor
+
+# Process schedules manually
+php artisan schedule:run
+
+# Check Instagram API service
+php artisan tinker
+>>> app(App\Services\InstagramApiService::class)->getAllInstagramAccounts();
+
+# Check failed jobs
+php artisan queue:failed
+
+# View detailed job logs
+sudo journalctl -u instagram-queue -f --since "1 hour ago"
+
+# Check Laravel application logs
+tail -f /var/www/instra_autopilot/storage/logs/laravel.log
+```load your project to VPS
 scp -r instagram_autopilot/ user@your-vps-ip:/var/www/instra_autopilot
 ```
 
@@ -84,6 +104,91 @@ sudo crontab -u www-data -e
 sudo journalctl -u cron -f
 ```
 
+## 🔧 **IMPORTANT: Upload Missing Files to VPS**
+
+After creating the service, you need to upload the missing Kernel.php file:
+
+```bash
+# On your VPS, create the missing Console Kernel
+cd /var/www/instra_autopilot
+
+# Create the Console Kernel file
+cat > app/Console/Kernel.php << 'EOF'
+<?php
+
+namespace App\Console;
+
+use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
+
+class Kernel extends ConsoleKernel
+{
+    protected function schedule(Schedule $schedule): void
+    {
+        $schedule->command('instagram:process-scheduled-posts')
+                 ->everyMinute()
+                 ->withoutOverlapping()
+                 ->runInBackground();
+                 
+        $schedule->command('queue:prune-failed --hours=48')
+                 ->daily();
+                 
+        $schedule->command('log:clear')
+                 ->weekly();
+    }
+
+    protected function commands(): void
+    {
+        $this->load(__DIR__.'/Commands');
+        require base_path('routes/console.php');
+    }
+}
+EOF
+
+# Create log clear command
+cat > app/Console/Commands/LogClearCommand.php << 'EOF'
+<?php
+
+namespace App\Console\Commands;
+
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\File;
+
+class LogClearCommand extends Command
+{
+    protected $signature = 'log:clear';
+    protected $description = 'Clear Laravel log files';
+
+    public function handle()
+    {
+        $logPath = storage_path('logs');
+        
+        if (!File::exists($logPath)) {
+            $this->info('No log directory found.');
+            return;
+        }
+        
+        $files = File::files($logPath);
+        $clearedCount = 0;
+        
+        foreach ($files as $file) {
+            if ($file->getExtension() === 'log') {
+                File::put($file->getPathname(), '');
+                $clearedCount++;
+            }
+        }
+        
+        $this->info("Cleared {$clearedCount} log file(s).");
+    }
+}
+EOF
+
+# Clear config cache and restart service
+php artisan config:clear
+php artisan config:cache
+sudo systemctl restart instagram-queue
+```
+
 ## 🔧 Troubleshooting
 
 ### If Queue Service Won't Start
@@ -92,13 +197,13 @@ sudo journalctl -u cron -f
 which php
 
 # Check project permissions
-sudo chown -R www-data:www-data /var/www/instagram_autopilot
-sudo chmod -R 755 /var/www/instagram_autopilot
-sudo chmod -R 775 /var/www/instagram_autopilot/storage
-sudo chmod -R 775 /var/www/instagram_autopilot/bootstrap/cache
+sudo chown -R www-data:www-data /var/www/instra_autopilot
+sudo chmod -R 755 /var/www/instra_autopilot
+sudo chmod -R 775 /var/www/instra_autopilot/storage
+sudo chmod -R 775 /var/www/instra_autopilot/bootstrap/cache
 
 # Test queue manually
-cd /var/www/instagram_autopilot
+cd /var/www/instra_autopilot
 sudo -u www-data php artisan queue:work --once
 ```
 
@@ -117,10 +222,14 @@ php artisan tinker
 ```
 
 ### Common Issues
-1. **Permission denied**: Run `sudo chown -R www-data:www-data /var/www/instagram_autopilot`
+1. **Permission denied**: Run `sudo chown -R www-data:www-data /var/www/instra_autopilot`
 2. **PHP not found**: Update service file with correct PHP path
 3. **Database connection**: Check .env database settings
 4. **Instagram API errors**: Verify Facebook App credentials in .env
+5. **Jobs failing**: Check Laravel logs and failed job queue
+6. **Invalid tokens**: Refresh Instagram account tokens via app interface
+7. **Missing Kernel.php**: Follow the file upload section above
+8. **Console command errors**: Ensure all artisan commands work: `php artisan list`
 
 ## 📈 Monitoring
 
@@ -142,7 +251,7 @@ free -h
 ### Log Files
 ```bash
 # Laravel logs
-tail -f /var/www/instagram_autopilot/storage/logs/laravel.log
+tail -f /var/www/instra_autopilot/storage/logs/laravel.log
 
 # Queue service logs
 sudo journalctl -u instagram-queue -f
@@ -162,7 +271,7 @@ sudo cp -r /var/www/instagram_autopilot /var/www/instagram_autopilot_backup
 # (your upload process)
 
 # Update dependencies
-cd /var/www/instagram_autopilot
+cd /var/www/instra_autopilot
 composer install --no-dev --optimize-autoloader
 
 # Run migrations
@@ -208,11 +317,11 @@ sudo systemctl enable certbot.timer
 ### File Permissions
 ```bash
 # Set proper permissions
-sudo chown -R www-data:www-data /var/www/instagram_autopilot
-sudo chmod -R 755 /var/www/instagram_autopilot
-sudo chmod -R 775 /var/www/instagram_autopilot/storage
-sudo chmod -R 775 /var/www/instagram_autopilot/bootstrap/cache
-sudo chmod 600 /var/www/instagram_autopilot/.env
+sudo chown -R www-data:www-data /var/www/instra_autopilot
+sudo chmod -R 755 /var/www/instra_autopilot
+sudo chmod -R 775 /var/www/instra_autopilot/storage
+sudo chmod -R 775 /var/www/instra_autopilot/bootstrap/cache
+sudo chmod 600 /var/www/instra_autopilot/.env
 ```
 
 ## 📱 Instagram Autopilot Features
