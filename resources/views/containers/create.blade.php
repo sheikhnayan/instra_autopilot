@@ -1,0 +1,184 @@
+@extends('layouts.app')
+
+@section('title', 'Create Container - SocialScheduler')
+@section('header', 'Create New Container')
+
+@section('content')
+<div class="max-w-4xl mx-auto">
+    <div class="bg-white rounded-lg shadow-sm border">
+        <div class="p-6">
+            <form action="{{ route('containers.store') }}" method="POST" id="container-form" enctype="multipart/form-data">
+                @csrf
+                
+                <!-- Container Details -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Container Details</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="name" class="block text-sm font-medium text-gray-700 mb-2">Container Name</label>
+                            <input type="text" id="name" name="name" required
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                   placeholder="e.g., Summer Campaign 2024"
+                                   value="{{ old('name') }}">
+                            @error('name')
+                                <p class="text-red-600 text-sm mt-1">{{ $message }}</p>
+                            @enderror
+                        </div>
+                        
+                        <div>
+                            <label for="description" class="block text-sm font-medium text-gray-700 mb-2">Description (Optional)</label>
+                            <input type="text" id="description" name="description"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                   placeholder="Brief description of this container"
+                                   value="{{ old('description') }}">
+                            @error('description')
+                                <p class="text-red-600 text-sm mt-1">{{ $message }}</p>
+                            @enderror
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Posts Section -->
+                <div class="mb-8">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-medium text-gray-900">Posts</h3>
+                        <button type="button" id="add-post" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
+                            + Add Post
+                        </button>
+                    </div>
+
+                    <div id="posts-container" class="space-y-6">
+                        <!-- Posts will be added here dynamically -->
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="flex items-center justify-between">
+                    <a href="{{ route('containers.index') }}" class="text-gray-600 hover:text-gray-800">
+                        Cancel
+                    </a>
+                    <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                        Create Container
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@push('scripts')
+<script>
+let postIndex = 0;
+
+function addPost() {
+    const postHtml = `
+        <div class="post-item border border-gray-200 rounded-lg p-4">
+            <div class="flex items-center justify-between mb-4">
+                <h4 class="font-medium text-gray-900">Post ${postIndex + 1}</h4>
+                <button type="button" class="remove-post text-red-600 hover:text-red-800 text-sm">Remove</button>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Caption</label>
+                    <textarea name="posts[${postIndex}][caption]" rows="4" required
+                              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="Write your Instagram caption here..."></textarea>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Images</label>
+                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center image-upload-area">
+                        <input type="file" multiple accept="image/*" class="hidden" name="posts[${postIndex}][images][]" id="images-${postIndex}">
+                        <div class="upload-placeholder">
+                            <svg class="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                            </svg>
+                            <p class="text-sm text-gray-500">Click to upload images</p>
+                            <p class="text-xs text-gray-400">PNG, JPG, GIF up to 10MB each</p>
+                        </div>
+                        <div class="image-preview-container hidden">
+                            <div class="grid grid-cols-2 gap-2" id="preview-${postIndex}"></div>
+                            <button type="button" class="mt-2 text-sm text-blue-600 hover:text-blue-800 change-images">Change Images</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Hashtags (Optional)</label>
+                <input type="text" name="posts[${postIndex}][hashtags]"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                       placeholder="#hashtag1 #hashtag2 #hashtag3">
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('posts-container').insertAdjacentHTML('beforeend', postHtml);
+    postIndex++;
+}
+
+// Handle image upload clicks
+document.getElementById('posts-container').addEventListener('click', function(e) {
+    if (e.target.classList.contains('remove-post')) {
+        e.target.closest('.post-item').remove();
+    }
+    
+    // Handle upload area clicks
+    if (e.target.closest('.upload-placeholder') || e.target.closest('.change-images')) {
+        const uploadArea = e.target.closest('.image-upload-area');
+        const fileInput = uploadArea.querySelector('input[type="file"]');
+        fileInput.click();
+    }
+});
+
+// Handle file selection
+document.getElementById('posts-container').addEventListener('change', function(e) {
+    if (e.target.type === 'file') {
+        handleImageUpload(e.target);
+    }
+});
+
+function handleImageUpload(input) {
+    const uploadArea = input.closest('.image-upload-area');
+    const placeholder = uploadArea.querySelector('.upload-placeholder');
+    const previewContainer = uploadArea.querySelector('.image-preview-container');
+    const previewGrid = previewContainer.querySelector('.grid');
+    
+    if (input.files && input.files.length > 0) {
+        // Clear previous previews
+        previewGrid.innerHTML = '';
+        
+        // Show preview container, hide placeholder
+        placeholder.classList.add('hidden');
+        previewContainer.classList.remove('hidden');
+        
+        // Create previews for each file
+        Array.from(input.files).forEach((file, index) => {
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const previewDiv = document.createElement('div');
+                    previewDiv.className = 'relative group';
+                    previewDiv.innerHTML = `
+                        <img src="${e.target.result}" class="w-full h-20 object-cover rounded-lg">
+                        <div class="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                            <span class="text-white text-xs">${file.name}</span>
+                        </div>
+                    `;
+                    previewGrid.appendChild(previewDiv);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+}
+
+document.getElementById('add-post').addEventListener('click', addPost);
+
+// Add first post by default
+addPost();
+</script>
+@endpush
+@endsection
