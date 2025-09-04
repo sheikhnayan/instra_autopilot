@@ -26,66 +26,96 @@ class InstagramAuthController extends Controller
     }
 
     /**
-     * Handle Instagram callback
+     * Handle Instagram callback and import all connected accounts
      */
     public function handleInstagramCallback(Request $request)
     {
         $code = $request->get('code');
+        $state = $request->get('state');
         $error = $request->get('error');
 
+        // Verify CSRF token
+        if ($state !== csrf_token()) {
+            return redirect()->route('dashboard')->with('error', 'Invalid state parameter');
+        }
+
         if ($error) {
-            return redirect()->route('dashboard')->with('error', 'Instagram authorization failed: ' . $error);
+            return redirect()->route('dashboard')->with('error', 'Authorization failed: ' . $error);
         }
 
         if (!$code) {
-            return redirect()->route('dashboard')->with('error', 'No authorization code received from Instagram');
+            return redirect()->route('dashboard')->with('error', 'No authorization code received');
         }
 
         try {
-            // Step 1: Get short-lived access token
+            // Step 1: Get short-lived user access token
             $tokenResponse = $this->instagramService->getAccessToken($code);
             
             if (!$tokenResponse || !isset($tokenResponse['access_token'])) {
-                return redirect()->route('dashboard')->with('error', 'Failed to get access token from Instagram');
+                return redirect()->route('dashboard')->with('error', 'Failed to get access token');
             }
 
-            // Step 2: Exchange for long-lived token
-            $longLivedTokenResponse = $this->instagramService->getLongLivedToken($tokenResponse['access_token']);
+            // Step 2: Exchange for long-lived user token (60 days)
+            $longLivedTokenResponse = $this->instagramService->getLongLivedUserToken($tokenResponse['access_token']);
             
-            if (!$longLivedTokenResponse || !isset($longLivedTokenResponse['access_token'])) {
-                return redirect()->route('dashboard')->with('error', 'Failed to get long-lived token from Instagram');
+            $userAccessToken = $longLivedTokenResponse['access_token'] ?? $tokenResponse['access_token'];
+            $expiresIn = $longLivedTokenResponse['expires_in'] ?? 3600;
+
+            // Step 3: Get all Instagram accounts
+            $instagramAccounts = $this->instagramService->getAllInstagramAccounts($userAccessToken);
+
+            if (empty($instagramAccounts)) {
+                return redirect()->route('dashboard')->with('error', 'No Instagram Business accounts found. Make sure your Instagram accounts are connected to Facebook Pages and converted to Business/Creator accounts.');
             }
 
-            // Step 3: Get user profile
-            $userProfile = $this->instagramService->getUserProfile($longLivedTokenResponse['access_token']);
+            $importedCount = 0;
+            $errors = [];
+
+            // Step 4: Save each Instagram account
+            foreach ($instagramAccounts as $accountData) {
+                try {
+                    $igAccount = $accountData['instagram_account'];
+                    
+                    $instagramAccount = InstagramAccount::updateOrCreate(
+                        ['instagram_business_account_id' => $igAccount['id']],
+                        [
+                            'username' => $igAccount['username'],
+                            'display_name' => $igAccount['name'] ?? $igAccount['username'],
+                            'avatar_color' => $this->generateRandomColor(),
+                            'access_token' => $userAccessToken,
+                            'token_expires_at' => now()->addSeconds($expiresIn),
+                            'instagram_user_id' => $igAccount['id'],
+                            'account_type' => 'BUSINESS',
+                            'media_count' => $igAccount['media_count'] ?? 0,
+                            'facebook_page_id' => $accountData['facebook_page_id'],
+                            'facebook_page_access_token' => $accountData['facebook_page_access_token'],
+                            'last_sync_at' => now(),
+                            'is_active' => true
+                        ]
+                    );
+
+                    $importedCount++;
+                    
+                } catch (\Exception $e) {
+                    $errors[] = "Failed to import @{$igAccount['username']}: " . $e->getMessage();
+                    Log::error('Failed to import Instagram account', [
+                        'username' => $igAccount['username'],
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            $message = "Successfully connected {$importedCount} Instagram account(s)!";
             
-            if (!$userProfile || !isset($userProfile['id'])) {
-                return redirect()->route('dashboard')->with('error', 'Failed to get user profile from Instagram');
+            if (!empty($errors)) {
+                $message .= " Errors: " . implode(', ', $errors);
             }
 
-            // Step 4: Save or update Instagram account
-            $expiresAt = now()->addSeconds($longLivedTokenResponse['expires_in'] ?? 5184000); // Default 60 days
-
-            $instagramAccount = InstagramAccount::updateOrCreate(
-                ['instagram_user_id' => $userProfile['id']],
-                [
-                    'username' => $userProfile['username'],
-                    'display_name' => $userProfile['username'],
-                    'avatar_color' => $this->generateRandomColor(),
-                    'access_token' => $longLivedTokenResponse['access_token'],
-                    'token_expires_at' => $expiresAt,
-                    'account_type' => $userProfile['account_type'] ?? 'PERSONAL',
-                    'media_count' => $userProfile['media_count'] ?? 0,
-                    'last_sync_at' => now(),
-                    'is_active' => true
-                ]
-            );
-
-            return redirect()->route('dashboard')->with('success', 'Instagram account connected successfully!');
+            return redirect()->route('dashboard')->with('success', $message);
 
         } catch (\Exception $e) {
             Log::error('Instagram callback error: ' . $e->getMessage());
-            return redirect()->route('dashboard')->with('error', 'An error occurred while connecting your Instagram account');
+            return redirect()->route('dashboard')->with('error', 'An error occurred while connecting Instagram accounts');
         }
     }
 

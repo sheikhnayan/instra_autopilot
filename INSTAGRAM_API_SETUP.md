@@ -1,36 +1,77 @@
-# Instagram API Integration Setup Guide
+# Instagram Multi-Account Posting Setup Guide
 
-This guide will help you set up Instagram API integration for the Instagram Autopilot application.
+## 🎯 **Development Mode Approach - Post to All Your Instagram Accounts**
 
-## Step 1: Create Instagram App
+This guide shows you how to use **ONE Facebook App in Development Mode** to post to **ALL Instagram accounts** linked to your Facebook Pages. **No App Review needed!**
 
-1. Go to [Facebook Developers](https://developers.facebook.com/)
-2. Click "Create App"
-3. Select "Business" as the app type
-4. Fill in your app details:
-   - App name: "Instagram Autopilot"
-   - App contact email: your email
-   - Business account: your business account
+## Step 1: Create the Facebook App ✅ (You've Done This)
 
-## Step 2: Add Instagram Basic Display
+Your app is already created with:
+- **App ID**: `1956604651783077`
+- **App Secret**: `fe37068a102eeb5a13b901010c038f3a`
+- **Redirect URI**: `https://bradygg.com/auth/instagram/callback`
 
-1. In your app dashboard, click "Add Product"
-2. Find "Instagram Basic Display" and click "Set Up"
-3. Go to Instagram Basic Display → Basic Display
-4. Click "Create New App"
+## Step 2: Configure App Products
 
-## Step 3: Configure Instagram App
+1. Go to [Meta for Developers](https://developers.facebook.com/) → My Apps → Your App
+2. **Add Products**:
+   - **Facebook Login** ✅
+   - **Instagram Graph API** ✅
+   - **Pages API** ✅
 
-1. In Basic Display settings:
-   - **Valid OAuth Redirect URIs**: Add `http://localhost:8000/auth/instagram/callback`
-   - **Deauthorize Callback URL**: Add `http://localhost:8000/auth/instagram/deauthorize`
-   - **Data Deletion Request URL**: Add `http://localhost:8000/auth/instagram/delete`
+3. **Configure Facebook Login**:
+   - Go to Facebook Login → Settings
+   - **Valid OAuth Redirect URIs**: `https://bradygg.com/auth/instagram/callback`
+   - **Client OAuth Login**: Yes
+   - **Web OAuth Login**: Yes
 
-## Step 4: Get App Credentials
+## Step 3: App Permissions (Development Mode)
 
-1. Go to Instagram Basic Display → Basic Display
-2. Copy your **Instagram App ID** and **Instagram App Secret**
-3. Update your `.env` file:
+In **App Review** → **Permissions and Features**, you need these permissions:
+
+### **Standard Permissions** (No review needed):
+- `public_profile` ✅
+- `email` ✅
+
+### **Advanced Permissions** (Development Mode only):
+- `pages_show_list` - Get user's Facebook Pages
+- `pages_read_engagement` - Read Page data
+- `instagram_basic` - Basic Instagram access
+- `instagram_content_publish` - Post to Instagram
+
+**Note**: In Development Mode, you can use these permissions for **Admins, Developers, and Testers** of your app without review.
+
+## Step 4: Add App Users (Your Instagram Accounts)
+
+1. Go to **App Roles** → **Roles**
+2. **Add People**:
+   - Add Facebook accounts that own the Instagram accounts you want to post to
+   - Role: **Admin** or **Tester**
+   - These users can use the app without App Review
+
+## Step 5: Connect Instagram Business Accounts
+
+For each Instagram account you want to automate:
+
+1. **Create/Link Facebook Page**:
+   - Go to [Facebook Pages](https://www.facebook.com/pages/create)
+   - Create a page or use existing page
+   - Make sure the Facebook account is an admin
+
+2. **Convert Instagram to Professional**:
+   - Open Instagram mobile app
+   - Settings → Account → Switch to Professional Account
+   - Choose **Creator** or **Business**
+   - **Connect to Facebook Page**
+
+3. **Link Instagram to Page**:
+   - Go to Facebook Page Settings
+   - Instagram → Connect Account
+   - Login to Instagram and authorize
+
+## Step 6: Update Your Application Code
+
+Your app credentials are already set, but let's enhance the authentication flow:
 
 ```env
 INSTAGRAM_CLIENT_ID=your_instagram_app_id_here

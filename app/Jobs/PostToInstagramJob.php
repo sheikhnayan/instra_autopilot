@@ -64,9 +64,27 @@ class PostToInstagramJob implements ShouldQueue
             $imageUrl = Storage::url($this->instagramPost->image_path);
             $fullImageUrl = config('app.url') . $imageUrl;
 
-            // Post to Instagram
+            // Use Facebook Page access token and Instagram Business Account ID
+            $pageAccessToken = $this->instagramAccount->facebook_page_access_token;
+            $instagramBusinessAccountId = $this->instagramAccount->instagram_business_account_id;
+
+            if (!$pageAccessToken || !$instagramBusinessAccountId) {
+                Log::error('Missing Facebook Page token or Instagram Business Account ID', [
+                    'account_id' => $this->instagramAccount->id,
+                    'username' => $this->instagramAccount->username
+                ]);
+                
+                $this->instagramPost->update([
+                    'status' => 'failed',
+                    'error_message' => 'Missing Facebook Page token or Instagram Business Account ID'
+                ]);
+                return;
+            }
+
+            // Post to Instagram using Graph API
             $result = $instagramService->postPhoto(
-                $this->instagramAccount->access_token,
+                $pageAccessToken,
+                $instagramBusinessAccountId,
                 $fullImageUrl,
                 $this->instagramPost->caption
             );

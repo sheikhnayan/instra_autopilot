@@ -14,6 +14,9 @@ class InstagramAccount extends Model
         'refresh_token',
         'token_expires_at',
         'instagram_user_id',
+        'instagram_business_account_id',
+        'facebook_page_id',
+        'facebook_page_access_token',
         'account_type',
         'media_count',
         'last_sync_at',
@@ -28,7 +31,8 @@ class InstagramAccount extends Model
 
     protected $hidden = [
         'access_token',
-        'refresh_token'
+        'refresh_token',
+        'facebook_page_access_token'
     ];
 
     public function schedules()
