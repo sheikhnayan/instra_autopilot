@@ -10,7 +10,7 @@
             <form action="{{ route('schedules.update', $schedule) }}" method="POST">
                 @csrf
                 @method('PUT')
-                
+                {{ \Carbon\Carbon::now() }}
                 <!-- Schedule Details -->
                 <div class="mb-8">
                     <h3 class="text-lg font-medium text-gray-900 mb-4">Schedule Details</h3>
