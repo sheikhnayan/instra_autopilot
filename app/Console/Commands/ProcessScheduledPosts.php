@@ -31,11 +31,7 @@ class ProcessScheduledPosts extends Command
         $this->info('Starting to process scheduled posts...');
 
         // Get all active schedules that are ready to execute
-        $schedules = Schedule::where('is_active', true)
-            ->where(function ($query) {
-                $query->whereNull('next_execution_at')
-                    ->orWhere('next_execution_at', '<=', Carbon::now());
-            })
+        $schedules = Schedule::where('status', 'active')
             ->with(['instagramAccount', 'contentContainer.posts'])
             ->get();
 
@@ -48,12 +44,49 @@ class ProcessScheduledPosts extends Command
 
         foreach ($schedules as $schedule) {
             try {
-                $this->info("Processing schedule ID: {$schedule->id} for container: {$schedule->contentContainer->name}");
+                $this->info("Checking schedule ID: {$schedule->id} for container: {$schedule->contentContainer->name}");
                 
-                // Dispatch the job to process this schedule
-                ProcessScheduledPostsJob::dispatch($schedule);
+                // Check if it's time to post based on interval
+                if (!$this->shouldPostNow($schedule)) {
+                    $this->info("Not time to post yet for schedule ID: {$schedule->id}");
+                    continue;
+                }
                 
-                $this->info("✓ Schedule ID: {$schedule->id} dispatched successfully");
+                // Get the next post from the container that hasn't been posted yet
+                $nextPost = $this->getNextPost($schedule);
+                
+                if (!$nextPost) {
+                    $this->info("No more posts to publish for schedule ID: {$schedule->id}");
+                    
+                    if ($schedule->repeat_cycle) {
+                        // Reset to first post if repeat cycle is enabled
+                        $schedule->update(['current_post_index' => 0]);
+                        $nextPost = $this->getNextPost($schedule);
+                    }
+                    
+                    if (!$nextPost) {
+                        // Mark schedule as completed if no repeat cycle
+                        $schedule->update(['status' => 'completed']);
+                        continue;
+                    }
+                }
+                
+                // Mark post as scheduled
+                $nextPost->update(['status' => 'scheduled']);
+                
+                // Dispatch the Instagram posting job
+                \App\Jobs\PostToInstagramJob::dispatch(
+                    $schedule->instagramAccount,
+                    $nextPost
+                );
+                
+                // Update schedule's last posted time and increment post index
+                $schedule->update([
+                    'last_posted_at' => now(),
+                    'current_post_index' => ($schedule->current_post_index ?? 0) + 1
+                ]);
+                
+                $this->info("✓ Schedule ID: {$schedule->id} - Post dispatched successfully");
                 
             } catch (\Exception $e) {
                 $this->error("✗ Failed to process schedule ID: {$schedule->id} - Error: {$e->getMessage()}");
@@ -61,5 +94,39 @@ class ProcessScheduledPosts extends Command
         }
 
         $this->info('Finished processing scheduled posts.');
+    }
+    
+    /**
+     * Check if it's time to post based on schedule
+     */
+    private function shouldPostNow($schedule)
+    {
+        // If never posted before, check if start time has passed
+        if (!$schedule->last_posted_at) {
+            $startDateTime = $schedule->start_date->format('Y-m-d') . ' ' . $schedule->start_time->format('H:i:s');
+            $startDateTime = \Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $startDateTime);
+            
+            return now()->greaterThanOrEqualTo($startDateTime);
+        }
+        
+        // Check if enough time has passed since last post
+        $nextPostTime = $schedule->last_posted_at->addMinutes($schedule->interval_minutes);
+        
+        return now()->greaterThanOrEqualTo($nextPostTime);
+    }
+    
+    /**
+     * Get the next post to publish from the container
+     */
+    private function getNextPost($schedule)
+    {
+        $posts = $schedule->contentContainer->posts()
+            ->where('status', 'draft')
+            ->orderBy('order')
+            ->get();
+            
+        $currentIndex = $schedule->current_post_index ?? 0;
+        
+        return $posts->skip($currentIndex)->first();
     }
 }
