@@ -1,0 +1,31 @@
+[Unit]
+Description=Instagram Autopilot Queue Worker
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/instagram_autopilot
+ExecStart=/usr/bin/php /var/www/instagram_autopilot/artisan queue:work --sleep=3 --tries=3 --max-time=3600
+Restart=always
+RestartSec=10
+
+# Set environment variables
+Environment=APP_ENV=production
+Environment=APP_DEBUG=false
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=instagram-queue
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/www/instagram_autopilot/storage
+ReadWritePaths=/var/www/instagram_autopilot/bootstrap/cache
+
+[Install]
+WantedBy=multi-user.target
