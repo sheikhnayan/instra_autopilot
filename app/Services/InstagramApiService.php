@@ -18,8 +18,8 @@ class InstagramApiService
     public function __construct()
     {
         $this->client = new Client();
-        $this->clientId = '628474840058403';
-        $this->clientSecret = 'dc43ab5503ce988bde8e870443659805';
+        $this->clientId = '1907520249713676';
+        $this->clientSecret = 'cb4991c5bd1234f100d1ab2381f9395e';
         $this->redirectUri = 'https://bradygg.com/auth/instagram/callback';
         $this->graphApiUrl = 'https://graph.facebook.com/v18.0';
         $this->basicDisplayApiUrl = 'https://graph.instagram.com/v18.0';
