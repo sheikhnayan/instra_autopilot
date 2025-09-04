@@ -284,7 +284,18 @@ class InstagramApiService
      */
     public function validateToken($accessToken)
     {
-        $userProfile = $this->getUserProfile($accessToken);
-        return $userProfile !== false;
+        try {
+            // Simple token validation by making a basic API call
+            $response = $this->client->get('https://graph.facebook.com/v18.0/me', [
+                'query' => [
+                    'access_token' => $accessToken,
+                ]
+            ]);
+
+            $result = json_decode($response->getBody()->getContents(), true);
+            return isset($result['id']);
+        } catch (\Exception $e) {
+            return false;
+        }
     }
 }
