@@ -35,7 +35,7 @@
                                     Container: {{ $schedule->contentContainer->name ?? 'N/A' }}
                                 </span>
                                 <span class="text-sm text-gray-500">
-                                    Account: @{{ $schedule->instagramAccount->username ?? 'N/A' }}
+                                    Account: {{ $schedule->instagramAccount->username ?? 'N/A' }}
                                 </span>
                             </div>
                         </div>

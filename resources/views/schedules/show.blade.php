@@ -100,7 +100,7 @@
                                      style="background-color: {{ $schedule->instagramAccount->avatar_color }}">
                                     {{ $schedule->instagramAccount->avatar_letter }}
                                 </div>
-                                <span class="font-medium">@{{ $schedule->instagramAccount->username }}</span>
+                                <span class="font-medium">{{ $schedule->instagramAccount->username }}</span>
                             </div>
                         </div>
                     </div>
