@@ -14,7 +14,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Variables
-PROJECT_PATH="/var/www/instagram_autopilot"
+PROJECT_PATH="/var/www/instra_autopilot"
 SERVICE_NAME="instagram-queue"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 
@@ -36,8 +36,8 @@ After=network.target mysql.service
 Type=simple
 User=www-data
 Group=www-data
-WorkingDirectory=/var/www/instagram_autopilot
-ExecStart=/usr/bin/php /var/www/instagram_autopilot/artisan queue:work --sleep=3 --tries=3 --max-time=3600
+WorkingDirectory=/var/www/instra_autopilot
+ExecStart=/usr/bin/php /var/www/instra_autopilot/artisan queue:work --sleep=3 --tries=3 --max-time=3600
 Restart=always
 RestartSec=10
 
@@ -54,8 +54,8 @@ SyslogIdentifier=instagram-queue
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/www/instagram_autopilot/storage
-ReadWritePaths=/var/www/instagram_autopilot/bootstrap/cache
+ReadWritePaths=/var/www/instra_autopilot/storage
+ReadWritePaths=/var/www/instra_autopilot/bootstrap/cache
 
 [Install]
 WantedBy=multi-user.target

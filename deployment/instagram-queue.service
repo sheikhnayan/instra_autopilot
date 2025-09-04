@@ -6,8 +6,8 @@ After=network.target mysql.service
 Type=simple
 User=www-data
 Group=www-data
-WorkingDirectory=/var/www/instagram_autopilot
-ExecStart=/usr/bin/php /var/www/instagram_autopilot/artisan queue:work --sleep=3 --tries=3 --max-time=3600
+WorkingDirectory=/var/www/instra_autopilot
+ExecStart=/usr/bin/php /var/www/instra_autopilot/artisan queue:work --sleep=3 --tries=3 --max-time=3600
 Restart=always
 RestartSec=10
 
@@ -24,8 +24,8 @@ SyslogIdentifier=instagram-queue
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/www/instagram_autopilot/storage
-ReadWritePaths=/var/www/instagram_autopilot/bootstrap/cache
+ReadWritePaths=/var/www/instra_autopilot/storage
+ReadWritePaths=/var/www/instra_autopilot/bootstrap/cache
 
 [Install]
 WantedBy=multi-user.target

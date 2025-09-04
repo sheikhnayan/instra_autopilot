@@ -5,13 +5,13 @@
 ### 1. Upload Files to VPS
 ```bash
 # Upload your project to VPS
-scp -r instagram_autopilot/ user@your-vps-ip:/var/www/
+scp -r instagram_autopilot/ user@your-vps-ip:/var/www/instra_autopilot
 ```
 
 ### 2. Set Up Queue Service
 ```bash
 # On your VPS, run:
-cd /var/www/instagram_autopilot/deployment
+cd /var/www/instra_autopilot/deployment
 sudo chmod +x setup-queue-service.sh
 sudo ./setup-queue-service.sh
 ```

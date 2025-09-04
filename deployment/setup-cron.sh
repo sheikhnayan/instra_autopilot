@@ -13,7 +13,7 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-PROJECT_PATH="/var/www/instagram_autopilot"
+PROJECT_PATH="/var/www/instra_autopilot"
 
 # Check if project directory exists
 if [ ! -d "$PROJECT_PATH" ]; then
