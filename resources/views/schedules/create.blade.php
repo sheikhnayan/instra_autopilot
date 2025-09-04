@@ -49,7 +49,7 @@
                                 <option value="">Select an account</option>
                                 @foreach($accounts as $account)
                                     <option value="{{ $account->id }}" {{ (old('instagram_account_id', $selectedAccountId ?? '') == $account->id) ? 'selected' : '' }}>
-                                        @{{ $account->username }} - {{ $account->display_name }}
+                                        {{ $account->username }} - {{ $account->display_name }}
                                     </option>
                                 @endforeach
                             </select>

@@ -32,10 +32,10 @@
                             <h3 class="font-medium text-gray-900">{{ $schedule->name }}</h3>
                             <div class="flex items-center space-x-4 mt-1">
                                 <span class="text-sm text-gray-500">
-                                    Container: {{ $schedule->contentContainer->name ?? null}}
+                                    Container: {{ $schedule->contentContainer->name ?? 'N/A' }}
                                 </span>
                                 <span class="text-sm text-gray-500">
-                                    Account: @{{ $schedule->instagramAccount->username ?? null}}
+                                    Account: @{{ $schedule->instagramAccount->username ?? 'N/A' }}
                                 </span>
                             </div>
                         </div>
