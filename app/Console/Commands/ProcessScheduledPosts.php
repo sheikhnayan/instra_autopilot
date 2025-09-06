@@ -101,18 +101,27 @@ class ProcessScheduledPosts extends Command
      */
     private function shouldPostNow($schedule)
     {
+        // Set timezone to New York for all time calculations
+        $ny_tz = new \DateTimeZone('America/New_York');
+        $now = Carbon::now($ny_tz);
+        
         // If never posted before, check if start time has passed
         if (!$schedule->last_posted_at) {
             $startDateTime = $schedule->start_date->format('Y-m-d') . ' ' . $schedule->start_time->format('H:i:s');
-            $startDateTime = \Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $startDateTime);
+            $startDateTime = Carbon::createFromFormat('Y-m-d H:i:s', $startDateTime, $ny_tz);
             
-            return now()->greaterThanOrEqualTo($startDateTime);
+            $this->info("Start time: {$startDateTime->format('Y-m-d H:i:s T')} | Current time: {$now->format('Y-m-d H:i:s T')}");
+            
+            return $now->greaterThanOrEqualTo($startDateTime);
         }
         
         // Check if enough time has passed since last post
-        $nextPostTime = $schedule->last_posted_at->addMinutes($schedule->interval_minutes);
+        $lastPosted = Carbon::parse($schedule->last_posted_at)->setTimezone($ny_tz);
+        $nextPostTime = $lastPosted->addMinutes($schedule->interval_minutes);
         
-        return now()->greaterThanOrEqualTo($nextPostTime);
+        $this->info("Last posted: {$lastPosted->format('Y-m-d H:i:s T')} | Next post time: {$nextPostTime->format('Y-m-d H:i:s T')} | Current time: {$now->format('Y-m-d H:i:s T')}");
+        
+        return $now->greaterThanOrEqualTo($nextPostTime);
     }
     
     /**

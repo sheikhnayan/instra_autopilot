@@ -65,6 +65,32 @@
                         </a>
                     </li>
                 </ul>
+
+                <!-- Profile Section -->
+                <div class="mt-8">
+                    <h3 class="text-gray-400 text-xs uppercase tracking-wider mb-4">ACCOUNT</h3>
+                    <ul class="space-y-2">
+                        <li>
+                            <a href="{{ route('profile.show') }}" class="flex items-center space-x-3 px-4 py-2 text-white rounded-lg hover:bg-gray-700 {{ request()->routeIs('profile.*') ? 'bg-gray-700' : '' }}">
+                                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                                </svg>
+                                <span>Profile</span>
+                            </a>
+                        </li>
+                        <li>
+                            <form action="{{ route('logout') }}" method="POST">
+                                @csrf
+                                <button type="submit" class="w-full flex items-center space-x-3 px-4 py-2 text-white rounded-lg hover:bg-gray-700 text-left">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    <span>Sign Out</span>
+                                </button>
+                            </form>
+                        </li>
+                    </ul>
+                </div>
             </nav>
         </div>
 

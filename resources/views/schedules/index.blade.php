@@ -92,6 +92,15 @@
                            class="text-sm text-gray-600 hover:text-gray-800 px-3 py-1 border border-gray-300 rounded hover:bg-gray-50">
                             Edit
                         </a>
+                        
+                        <form action="{{ route('schedules.destroy', $schedule) }}" method="POST" class="inline" 
+                              onsubmit="return confirm('Are you sure you want to delete this schedule? This action cannot be undone.')">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="text-sm text-red-600 hover:text-red-800 px-3 py-1 border border-red-300 rounded hover:bg-red-50">
+                                Delete
+                            </button>
+                        </form>
                     </div>
                 </div>
             </div>

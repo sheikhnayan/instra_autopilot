@@ -40,12 +40,17 @@ class ScheduleController extends Controller
             'repeat_cycle' => 'boolean'
         ]);
 
+        // Convert start_date and start_time to New York timezone for storage
+        $nyTimezone = new \DateTimeZone('America/New_York');
+        $startDateTime = $request->start_date . ' ' . $request->start_time;
+        $startDateTimeNY = \Carbon\Carbon::createFromFormat('Y-m-d H:i', $startDateTime, $nyTimezone);
+
         Schedule::create([
             'name' => $request->name,
             'content_container_id' => $request->content_container_id,
             'instagram_account_id' => $request->instagram_account_id,
-            'start_date' => $request->start_date,
-            'start_time' => $request->start_time,
+            'start_date' => $startDateTimeNY->format('Y-m-d'),
+            'start_time' => $startDateTimeNY->format('H:i:s'),
             'interval_minutes' => $request->interval_minutes,
             'repeat_cycle' => $request->boolean('repeat_cycle', true),
             'status' => 'active',
@@ -53,7 +58,7 @@ class ScheduleController extends Controller
         ]);
 
         return redirect()->route('schedules.index')
-            ->with('success', 'Schedule created successfully!');
+            ->with('success', 'Schedule created successfully! All times are in New York timezone.');
     }
 
     public function show(Schedule $schedule)
