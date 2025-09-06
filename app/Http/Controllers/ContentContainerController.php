@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ContentContainer;
 use App\Models\InstagramPost;
 use Illuminate\Http\Request;
+use Log;
 
 class ContentContainerController extends Controller
 {
