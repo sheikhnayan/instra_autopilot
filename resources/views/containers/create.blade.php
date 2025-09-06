@@ -97,6 +97,12 @@ function addPost() {
                             </svg>
                             <p class="text-sm text-gray-500">Click to upload images</p>
                             <p class="text-xs text-gray-400">PNG, JPG, GIF up to 10MB each</p>
+                            <div class="mt-2 p-2 bg-blue-50 rounded-md">
+                                <p class="text-xs text-blue-700 font-medium">📏 Instagram Requirements:</p>
+                                <p class="text-xs text-blue-600">• Single image: 4:5 to 1.91:1 aspect ratio</p>
+                                <p class="text-xs text-blue-600">• Multiple images: 4:5 to 1:1 (square) aspect ratio</p>
+                                <p class="text-xs text-blue-600">• Minimum 320px wide, recommended 1080px</p>
+                            </div>
                         </div>
                         <div class="image-preview-container hidden">
                             <div class="grid grid-cols-2 gap-2" id="preview-${postIndex}"></div>
