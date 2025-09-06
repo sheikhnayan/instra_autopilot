@@ -484,9 +484,80 @@ class InstagramApiService
                 ]
             ]);
 
-            return json_decode($response->getBody()->getContents(), true);
+            $result = json_decode($response->getBody()->getContents(), true);
+            
+            Log::info('Token refresh successful', [
+                'access_token_type' => $result['token_type'] ?? 'unknown',
+                'expires_in' => $result['expires_in'] ?? 'unknown'
+            ]);
+            
+            return $result;
         } catch (RequestException $e) {
-            Log::error('Instagram API Error: ' . $e->getMessage());
+            Log::error('Instagram Token Refresh Error', [
+                'error' => $e->getMessage(),
+                'response' => $e->hasResponse() ? $e->getResponse()->getBody()->getContents() : null
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Check if an error response indicates token expiration/invalidity
+     */
+    public function isTokenExpiredError($errorResponse)
+    {
+        if (!$errorResponse) return false;
+        
+        // Common Instagram API error codes/messages for expired tokens
+        $expiredTokenIndicators = [
+            'OAuthException',
+            'Invalid OAuth access token',
+            'Access token has expired',
+            'Token is expired',
+            'Invalid access token',
+            'The access token expired',
+            'OAuth error',
+            '#200', // Instagram API error code for invalid token
+            '#190', // Facebook API error code for expired token
+        ];
+        
+        $errorString = is_array($errorResponse) ? json_encode($errorResponse) : (string)$errorResponse;
+        
+        foreach ($expiredTokenIndicators as $indicator) {
+            if (stripos($errorString, $indicator) !== false) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * Attempt to refresh Facebook Page access token
+     */
+    public function refreshPageAccessToken($userAccessToken)
+    {
+        try {
+            // Get fresh page access token using user access token
+            $response = $this->client->get($this->graphApiUrl . '/me/accounts', [
+                'query' => [
+                    'access_token' => $userAccessToken,
+                    'fields' => 'access_token,name,id,instagram_business_account'
+                ]
+            ]);
+
+            $result = json_decode($response->getBody()->getContents(), true);
+            
+            Log::info('Page token refresh successful', [
+                'pages_count' => count($result['data'] ?? [])
+            ]);
+            
+            return $result;
+        } catch (RequestException $e) {
+            Log::error('Facebook Page Token Refresh Error', [
+                'error' => $e->getMessage(),
+                'response' => $e->hasResponse() ? $e->getResponse()->getBody()->getContents() : null
+            ]);
             return false;
         }
     }

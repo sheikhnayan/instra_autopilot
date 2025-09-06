@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\InstagramAccount;
 use App\Models\InstagramPost;
 use App\Services\InstagramApiService;
+use App\Services\TokenRefreshService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -32,33 +33,26 @@ class PostToInstagramJob implements ShouldQueue
     public function handle(InstagramApiService $instagramService): void
     {
         try {
-            // Check if account has valid token
-            if (!$this->instagramAccount->access_token || !$this->instagramAccount->isTokenValid()) {
-                Log::error('Instagram account token is invalid or expired', [
+                        // Initialize services
+            $instagramService = new InstagramApiService();
+            $tokenRefreshService = new TokenRefreshService($instagramService);
+
+            // Ensure we have a valid token (with automatic refresh if needed)
+            if (!$tokenRefreshService->ensureValidToken($this->instagramAccount)) {
+                Log::error('Unable to obtain valid token for Instagram account', [
                     'account_id' => $this->instagramAccount->id,
                     'username' => $this->instagramAccount->username
                 ]);
                 
                 $this->instagramPost->update([
                     'status' => 'failed',
-                    'error_message' => 'Account token is invalid or expired'
+                    'error_message' => 'Account token is invalid or expired and cannot be refreshed - re-authentication required'
                 ]);
                 return;
             }
 
-            // Validate that the token still works
-            if (!$instagramService->validateToken($this->instagramAccount->access_token)) {
-                Log::error('Instagram token validation failed', [
-                    'account_id' => $this->instagramAccount->id,
-                    'username' => $this->instagramAccount->username
-                ]);
-                
-                $this->instagramPost->update([
-                    'status' => 'failed',
-                    'error_message' => 'Token validation failed'
-                ]);
-                return;
-            }
+            // Refresh the account model to get any updated tokens
+            $this->instagramAccount->refresh();
 
             // Use Facebook Page access token and Instagram Business Account ID
             $pageAccessToken = $this->instagramAccount->facebook_page_access_token;
@@ -238,9 +232,42 @@ class PostToInstagramJob implements ShouldQueue
                 'trace' => $e->getTraceAsString()
             ]);
 
+            // Check if this might be a token expiration issue
+            $instagramService = new InstagramApiService();
+            if ($instagramService->isTokenExpiredError($e->getMessage())) {
+                Log::info('Detected token expiration in exception, attempting automatic refresh', [
+                    'post_id' => $this->instagramPost->id,
+                    'account_id' => $this->instagramAccount->id
+                ]);
+                
+                $tokenRefreshService = new TokenRefreshService($instagramService);
+                if ($tokenRefreshService->refreshAccountToken($this->instagramAccount)) {
+                    Log::info('Token refreshed successfully after exception, retrying post', [
+                        'post_id' => $this->instagramPost->id,
+                        'account_id' => $this->instagramAccount->id
+                    ]);
+                    
+                    // Retry the posting with fresh tokens
+                    try {
+                        $this->handle(); // Recursive call with fresh tokens
+                        return; // Success, exit gracefully
+                    } catch (\Exception $retryException) {
+                        Log::error('Retry after token refresh also failed', [
+                            'post_id' => $this->instagramPost->id,
+                            'retry_error' => $retryException->getMessage()
+                        ]);
+                    }
+                } else {
+                    Log::error('Token refresh failed after exception', [
+                        'post_id' => $this->instagramPost->id,
+                        'account_id' => $this->instagramAccount->id
+                    ]);
+                }
+            }
+
             $this->instagramPost->update([
                 'status' => 'failed',
-                'error_message' => $e->getMessage()
+                'error_message' => 'Exception: ' . $e->getMessage()
             ]);
 
             // Re-throw the exception to trigger job retry if needed
@@ -263,5 +290,17 @@ class PostToInstagramJob implements ShouldQueue
             'status' => 'failed',
             'error_message' => 'Job failed permanently: ' . $exception->getMessage()
         ]);
+    }
+
+    /**
+     * Refresh token if needed using the TokenRefreshService
+     *
+     * @param InstagramApiService $instagramService
+     * @return bool
+     */
+    private function refreshTokenIfNeeded($instagramService)
+    {
+        $tokenRefreshService = new TokenRefreshService($instagramService);
+        return $tokenRefreshService->refreshAccountToken($this->instagramAccount);
     }
 }
