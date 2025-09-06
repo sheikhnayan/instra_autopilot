@@ -60,10 +60,6 @@ class PostToInstagramJob implements ShouldQueue
                 return;
             }
 
-            // Get the full URL for the image
-            $imageUrl = Storage::url($this->instagramPost->image_path);
-            $fullImageUrl = config('app.url') . $imageUrl;
-
             // Use Facebook Page access token and Instagram Business Account ID
             $pageAccessToken = $this->instagramAccount->facebook_page_access_token;
             $instagramBusinessAccountId = $this->instagramAccount->instagram_business_account_id;
@@ -81,13 +77,71 @@ class PostToInstagramJob implements ShouldQueue
                 return;
             }
 
-            // Post to Instagram using Graph API
-            $result = $instagramService->postPhoto(
-                $pageAccessToken,
-                $instagramBusinessAccountId,
-                $fullImageUrl,
-                $this->instagramPost->caption
-            );
+            // Check if post has multiple images (carousel) or single image
+            $hasMultipleImages = !empty($this->instagramPost->images) && count($this->instagramPost->images) > 1;
+            
+            Log::info('Processing Instagram post', [
+                'post_id' => $this->instagramPost->id,
+                'has_multiple_images' => $hasMultipleImages,
+                'image_count' => $hasMultipleImages ? count($this->instagramPost->images) : 1,
+                'images_data' => $this->instagramPost->images
+            ]);
+
+            if ($hasMultipleImages) {
+                // Handle carousel post (multiple images)
+                $imageUrls = [];
+                foreach ($this->instagramPost->images as $imagePath) {
+                    // Remove leading slash if present and ensure proper URL format
+                    $cleanPath = ltrim($imagePath, '/');
+                    $imageUrls[] = config('app.url') . '/' . $cleanPath;
+                }
+
+                Log::info('Posting carousel with URLs', ['urls' => $imageUrls]);
+
+                // Post carousel to Instagram using Graph API
+                $result = $instagramService->postCarousel(
+                    $pageAccessToken,
+                    $instagramBusinessAccountId,
+                    $imageUrls,
+                    $this->instagramPost->caption
+                );
+            } else {
+                // Handle single image post
+                $imageUrl = null;
+                
+                // Try to get image from images array first, then fallback to image_path
+                if (!empty($this->instagramPost->images) && isset($this->instagramPost->images[0])) {
+                    $cleanPath = ltrim($this->instagramPost->images[0], '/');
+                    $imageUrl = config('app.url') . '/' . $cleanPath;
+                } elseif ($this->instagramPost->image_path) {
+                    $imageUrl = Storage::url($this->instagramPost->image_path);
+                    $imageUrl = config('app.url') . $imageUrl;
+                }
+
+                if (!$imageUrl) {
+                    Log::error('No image found for post', [
+                        'post_id' => $this->instagramPost->id,
+                        'images' => $this->instagramPost->images,
+                        'image_path' => $this->instagramPost->image_path
+                    ]);
+                    
+                    $this->instagramPost->update([
+                        'status' => 'failed',
+                        'error_message' => 'No image found for posting'
+                    ]);
+                    return;
+                }
+
+                Log::info('Posting single image with URL', ['url' => $imageUrl]);
+
+                // Post single image to Instagram using Graph API
+                $result = $instagramService->postPhoto(
+                    $pageAccessToken,
+                    $instagramBusinessAccountId,
+                    $imageUrl,
+                    $this->instagramPost->caption
+                );
+            }
 
             if ($result && isset($result['id'])) {
                 // Success

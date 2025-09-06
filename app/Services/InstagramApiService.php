@@ -239,20 +239,58 @@ class InstagramApiService
     /**
      * Upload media to Instagram (photo) - Graph API
      */
-    public function createMediaObject($accessToken, $instagramAccountId, $imageUrl, $caption = '')
+    public function createMediaObject($accessToken, $instagramAccountId, $imageUrl, $caption = '', $isCarouselItem = false)
     {
         try {
+            $params = [
+                'image_url' => $imageUrl,
+                'access_token' => $accessToken,
+            ];
+
+            // For single posts, add caption. For carousel items, caption goes on the container
+            if (!$isCarouselItem && $caption) {
+                $params['caption'] = $caption;
+            }
+
+            // For carousel items, specify it's a carousel item
+            if ($isCarouselItem) {
+                $params['is_carousel_item'] = 'true';
+            }
+
             $response = $this->client->post("https://graph.facebook.com/v18.0/{$instagramAccountId}/media", [
-                'form_params' => [
-                    'image_url' => $imageUrl,
-                    'caption' => $caption,
-                    'access_token' => $accessToken,
-                ]
+                'form_params' => $params
             ]);
 
             return json_decode($response->getBody()->getContents(), true);
         } catch (RequestException $e) {
             Log::error('Instagram API Error: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Create carousel container for multiple images
+     */
+    public function createCarouselContainer($accessToken, $instagramAccountId, $mediaIds, $caption = '')
+    {
+        try {
+            $params = [
+                'media_type' => 'CAROUSEL',
+                'children' => implode(',', $mediaIds),
+                'access_token' => $accessToken,
+            ];
+
+            if ($caption) {
+                $params['caption'] = $caption;
+            }
+
+            $response = $this->client->post("https://graph.facebook.com/v18.0/{$instagramAccountId}/media", [
+                'form_params' => $params
+            ]);
+
+            return json_decode($response->getBody()->getContents(), true);
+        } catch (RequestException $e) {
+            Log::error('Instagram API Error creating carousel container: ' . $e->getMessage());
             return false;
         }
     }
@@ -295,6 +333,56 @@ class InstagramApiService
         // Step 3: Publish the media
         $publishResponse = $this->publishMedia($accessToken, $instagramAccountId, $mediaResponse['id']);
 
+        return $publishResponse;
+    }
+
+    /**
+     * Post multiple photos as a carousel to Instagram
+     */
+    public function postCarousel($accessToken, $instagramAccountId, $imageUrls, $caption = '')
+    {
+        Log::info('Starting carousel post creation', [
+            'instagram_account_id' => $instagramAccountId,
+            'image_count' => count($imageUrls),
+            'caption_length' => strlen($caption)
+        ]);
+
+        $mediaIds = [];
+        
+        // Step 1: Create media objects for each image
+        foreach ($imageUrls as $index => $imageUrl) {
+            Log::info("Creating media object for image {$index}", ['url' => $imageUrl]);
+            
+            $mediaResponse = $this->createMediaObject($accessToken, $instagramAccountId, $imageUrl, '', true); // true for carousel
+            
+            if (!$mediaResponse || !isset($mediaResponse['id'])) {
+                Log::error("Failed to create media object for image {$index}", ['response' => $mediaResponse]);
+                return false;
+            }
+            
+            $mediaIds[] = $mediaResponse['id'];
+            Log::info("Created media object {$index}", ['media_id' => $mediaResponse['id']]);
+        }
+
+        // Step 2: Wait for all media to process
+        sleep(3);
+
+        // Step 3: Create carousel container
+        $carouselResponse = $this->createCarouselContainer($accessToken, $instagramAccountId, $mediaIds, $caption);
+        
+        if (!$carouselResponse || !isset($carouselResponse['id'])) {
+            Log::error('Failed to create carousel container', ['response' => $carouselResponse]);
+            return false;
+        }
+
+        // Step 4: Wait for carousel processing
+        sleep(2);
+
+        // Step 5: Publish the carousel
+        $publishResponse = $this->publishMedia($accessToken, $instagramAccountId, $carouselResponse['id']);
+        
+        Log::info('Carousel post completed', ['publish_response' => $publishResponse]);
+        
         return $publishResponse;
     }
 
