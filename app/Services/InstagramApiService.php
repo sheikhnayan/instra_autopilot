@@ -30,7 +30,7 @@ class InstagramApiService
     /**
      * Generate Facebook authorization URL for multi-account access
      */
-    public function getAuthorizationUrl($scopes = ['public_profile', 'email', 'pages_show_list', 'pages_read_engagement', 'instagram_basic', 'instagram_content_publish'])
+    public function getAuthorizationUrl($scopes = ['public_profile', 'email', 'pages_show_list', 'pages_read_engagement', 'pages_manage_metadata', 'pages_manage_posts', 'instagram_basic', 'instagram_content_publish', 'business_management'])
     {
         $params = [
             'client_id' => $this->clientId,
@@ -93,16 +93,47 @@ class InstagramApiService
     public function getFacebookPages($userAccessToken)
     {
         try {
+            // First, let's check what permissions we have
+            $permissionsResponse = $this->client->get('https://graph.facebook.com/v18.0/me/permissions', [
+                'query' => [
+                    'access_token' => $userAccessToken,
+                ]
+            ]);
+            
+            $permissions = json_decode($permissionsResponse->getBody()->getContents(), true);
+            Log::info('User permissions', ['permissions' => $permissions]);
+            
             $response = $this->client->get('https://graph.facebook.com/v18.0/me/accounts', [
                 'query' => [
                     'access_token' => $userAccessToken,
-                    'fields' => 'id,name,access_token,instagram_business_account'
+                    'fields' => 'id,name,access_token,instagram_business_account,tasks,category'
                 ]
             ]);
 
-            return json_decode($response->getBody()->getContents(), true);
+            $result = json_decode($response->getBody()->getContents(), true);
+            
+            // Also try to get business pages specifically
+            try {
+                $businessResponse = $this->client->get('https://graph.facebook.com/v18.0/me', [
+                    'query' => [
+                        'access_token' => $userAccessToken,
+                        'fields' => 'accounts{id,name,access_token,instagram_business_account,tasks,category}'
+                    ]
+                ]);
+                
+                $businessResult = json_decode($businessResponse->getBody()->getContents(), true);
+                Log::info('Business accounts query', ['result' => $businessResult]);
+            } catch (RequestException $e) {
+                Log::info('Business accounts query failed', ['error' => $e->getMessage()]);
+            }
+            
+            return $result;
+            
         } catch (RequestException $e) {
             Log::error('Facebook Pages API Error: ' . $e->getMessage());
+            if ($e->getResponse()) {
+                Log::error('Response body: ' . $e->getResponse()->getBody()->getContents());
+            }
             return false;
         }
     }
