@@ -61,41 +61,22 @@ class InstagramAuthController extends Controller
             $userAccessToken = $longLivedTokenResponse['access_token'] ?? $tokenResponse['access_token'];
             $expiresIn = $longLivedTokenResponse['expires_in'] ?? 3600;
             
-            // Step 3: Get Instagram accounts (with limits for server performance)
-            Log::info('Attempting to get Instagram accounts with token', [
+            // Step 3: Import first batch immediately, queue the rest
+            Log::info('Starting Instagram account import process', [
                 'token_length' => strlen($userAccessToken),
                 'token_starts_with' => substr($userAccessToken, 0, 20) . '...',
                 'server_memory_limit' => ini_get('memory_limit'),
                 'current_memory_usage' => round(memory_get_usage(true) / 1024 / 1024, 2) . 'MB'
             ]);
             
-            $instagramAccounts = $this->instagramService->getAllInstagramAccounts($userAccessToken);
+            // Import first batch immediately (30 accounts)
+            $firstBatchResult = $this->instagramService->importAccountsBatch($userAccessToken, null, 30);
             
-            Log::info('Instagram accounts result', [
-                'count' => count($instagramAccounts),
-                'memory_after_fetch' => round(memory_get_usage(true) / 1024 / 1024, 2) . 'MB'
-            ]);
-            
-            // Debug: Let's also try to get user info and pages
-            try {
-                $userInfo = $this->instagramService->getUserInfo($userAccessToken);
-                Log::info('User info', ['user' => $userInfo]);
-                
-                $pages = $this->instagramService->getUserPages($userAccessToken);
-                Log::info('User pages', ['pages' => $pages]);
-            } catch (\Exception $e) {
-                Log::error('Debug API calls failed', ['error' => $e->getMessage()]);
-            }
-
-            if (empty($instagramAccounts)) {
-                return redirect()->route('dashboard')->with('error', 'No Instagram Business accounts found. Make sure your Instagram accounts are connected to Facebook Pages and converted to Business/Creator accounts.');
-            }
-
             $importedCount = 0;
             $errors = [];
 
-            // Step 4: Save each Instagram account
-            foreach ($instagramAccounts as $accountData) {
+            // Process the first batch accounts
+            foreach ($firstBatchResult['accounts'] as $accountData) {
                 try {
                     $igAccount = $accountData['instagram_account'];
                     
@@ -128,10 +109,31 @@ class InstagramAuthController extends Controller
                 }
             }
 
-            $message = "Successfully connected {$importedCount} Instagram account(s)!";
+            // If there are more accounts to import, queue background jobs
+            if (!empty($firstBatchResult['next_url'])) {
+                Log::info('Queueing background import for remaining accounts', [
+                    'first_batch_imported' => $importedCount,
+                    'has_more_pages' => true
+                ]);
+
+                // Queue background import starting from the next page
+                \App\Jobs\ImportInstagramAccountsBatch::dispatch(
+                    $userAccessToken,
+                    $firstBatchResult['next_url'],
+                    2, // batch number (first batch was 1)
+                    15  // max 15 additional batches (15 * 25 = 375 more accounts)
+                )->delay(now()->addSeconds(10)); // Start after 10 seconds
+
+                $message = "Successfully connected {$importedCount} Instagram account(s) immediately! Additional accounts are being imported in the background. Check back in a few minutes to see all your accounts.";
+            } else {
+                $message = "Successfully connected {$importedCount} Instagram account(s)!";
+            }
             
             if (!empty($errors)) {
-                $message .= " Errors: " . implode(', ', $errors);
+                $message .= " Some errors occurred: " . implode(', ', array_slice($errors, 0, 3));
+                if (count($errors) > 3) {
+                    $message .= " and " . (count($errors) - 3) . " more...";
+                }
             }
 
             return redirect()->route('dashboard')->with('success', $message);

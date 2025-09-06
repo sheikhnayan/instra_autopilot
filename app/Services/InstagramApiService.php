@@ -309,6 +309,115 @@ class InstagramApiService
     }
 
     /**
+     * Import Instagram accounts in batches for background processing
+     */
+    public function importAccountsBatch($userAccessToken, $nextUrl = null, $batchSize = 25)
+    {
+        $instagramAccounts = [];
+        $processedPages = 0;
+        $maxProcessingTime = 25; // seconds - shorter for background jobs
+        $startTime = time();
+        
+        Log::info('Starting batch import', [
+            'batch_size' => $batchSize,
+            'has_next_url' => !empty($nextUrl),
+            'max_processing_time' => $maxProcessingTime . 's'
+        ]);
+        
+        try {
+            if ($nextUrl) {
+                // Continue from where we left off
+                $response = $this->client->get($nextUrl);
+            } else {
+                // Start fresh batch
+                $response = $this->client->get('https://graph.facebook.com/v18.0/me/accounts', [
+                    'query' => [
+                        'access_token' => $userAccessToken,
+                        'fields' => 'id,name,access_token,instagram_business_account,tasks,category',
+                        'limit' => $batchSize
+                    ]
+                ]);
+            }
+
+            $result = json_decode($response->getBody()->getContents(), true);
+            
+            if (!isset($result['data'])) {
+                Log::warning('No data in batch response');
+                return ['accounts' => [], 'next_url' => null];
+            }
+
+            Log::info('Processing batch of pages', [
+                'page_count' => count($result['data']),
+                'memory_usage' => round(memory_get_usage(true) / 1024 / 1024, 2) . 'MB'
+            ]);
+
+            foreach ($result['data'] as $page) {
+                // Check processing time limit
+                if (time() - $startTime > $maxProcessingTime) {
+                    Log::warning('Batch processing time limit reached', [
+                        'processed_pages' => $processedPages,
+                        'processing_time' => time() - $startTime . 's'
+                    ]);
+                    break;
+                }
+                
+                try {
+                    // Get Instagram account for each page
+                    $igAccount = $this->getInstagramBusinessAccount($page['access_token'], $page['id']);
+                    
+                    if ($igAccount && isset($igAccount['instagram_business_account'])) {
+                        $instagramAccounts[] = [
+                            'facebook_page_id' => $page['id'],
+                            'facebook_page_name' => $page['name'],
+                            'facebook_page_access_token' => $page['access_token'],
+                            'instagram_account' => $igAccount['instagram_business_account']
+                        ];
+                        
+                        Log::debug('Found Instagram account in batch', [
+                            'username' => $igAccount['instagram_business_account']['username'] ?? 'unknown',
+                            'page_id' => $page['id']
+                        ]);
+                    }
+                    
+                    $processedPages++;
+                    
+                    // Small delay to reduce server load
+                    usleep(100000); // 100ms delay for background jobs
+                    
+                } catch (\Exception $e) {
+                    Log::error('Error processing page in batch', [
+                        'page_id' => $page['id'],
+                        'error' => $e->getMessage()
+                    ]);
+                    continue;
+                }
+            }
+
+            $nextPageUrl = $result['paging']['next'] ?? null;
+
+            Log::info('Batch import completed', [
+                'accounts_found' => count($instagramAccounts),
+                'pages_processed' => $processedPages,
+                'processing_time' => time() - $startTime . 's',
+                'has_next_page' => !empty($nextPageUrl),
+                'memory_peak' => round(memory_get_peak_usage(true) / 1024 / 1024, 2) . 'MB'
+            ]);
+
+            return [
+                'accounts' => $instagramAccounts,
+                'next_url' => $nextPageUrl
+            ];
+
+        } catch (RequestException $e) {
+            Log::error('Batch import API error', [
+                'error' => $e->getMessage(),
+                'response_body' => $e->getResponse() ? $e->getResponse()->getBody()->getContents() : 'No response'
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
      * Get user profile information (Instagram Business Account)
      */
     public function getUserProfile($accessToken, $instagramAccountId)
