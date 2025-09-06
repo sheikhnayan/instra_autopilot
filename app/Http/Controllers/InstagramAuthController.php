@@ -61,7 +61,7 @@ class InstagramAuthController extends Controller
             $userAccessToken = $longLivedTokenResponse['access_token'] ?? $tokenResponse['access_token'];
             $expiresIn = $longLivedTokenResponse['expires_in'] ?? 3600;
             
-            // Step 3: Import first batch immediately, queue the rest
+            // Step 3: Get Instagram accounts using existing working method
             Log::info('Starting Instagram account import process', [
                 'token_length' => strlen($userAccessToken),
                 'token_starts_with' => substr($userAccessToken, 0, 20) . '...',
@@ -69,14 +69,23 @@ class InstagramAuthController extends Controller
                 'current_memory_usage' => round(memory_get_usage(true) / 1024 / 1024, 2) . 'MB'
             ]);
             
-            // Import first batch immediately (30 accounts)
-            $firstBatchResult = $this->instagramService->importAccountsBatch($userAccessToken, null, 30);
+            // Use the existing working method that got you 37 accounts
+            $instagramAccounts = $this->instagramService->getAllInstagramAccounts($userAccessToken);
             
+            Log::info('Instagram accounts result', [
+                'count' => count($instagramAccounts),
+                'memory_after_fetch' => round(memory_get_usage(true) / 1024 / 1024, 2) . 'MB'
+            ]);
+
+            if (empty($instagramAccounts)) {
+                return redirect()->route('dashboard')->with('error', 'No Instagram Business accounts found. Make sure your Instagram accounts are connected to Facebook Pages and converted to Business/Creator accounts.');
+            }
+
             $importedCount = 0;
             $errors = [];
 
-            // Process the first batch accounts
-            foreach ($firstBatchResult['accounts'] as $accountData) {
+            // Process all accounts from the existing working method
+            foreach ($instagramAccounts as $accountData) {
                 try {
                     $igAccount = $accountData['instagram_account'];
                     
@@ -109,22 +118,13 @@ class InstagramAuthController extends Controller
                 }
             }
 
-            // If there are more accounts to import, queue background jobs
-            if (!empty($firstBatchResult['next_url'])) {
-                Log::info('Queueing background import for remaining accounts', [
-                    'first_batch_imported' => $importedCount,
-                    'has_more_pages' => true
+            // Check if there might be more accounts available
+            if ($importedCount >= 100) {
+                Log::info('Imported maximum batch size, there might be more accounts available', [
+                    'imported_count' => $importedCount
                 ]);
-
-                // Queue background import starting from the next page
-                \App\Jobs\ImportInstagramAccountsBatch::dispatch(
-                    $userAccessToken,
-                    $firstBatchResult['next_url'],
-                    2, // batch number (first batch was 1)
-                    15  // max 15 additional batches (15 * 25 = 375 more accounts)
-                )->delay(now()->addSeconds(10)); // Start after 10 seconds
-
-                $message = "Successfully connected {$importedCount} Instagram account(s) immediately! Additional accounts are being imported in the background. Check back in a few minutes to see all your accounts.";
+                
+                $message = "Successfully connected {$importedCount} Instagram account(s)! If you have more accounts, try reconnecting to import additional batches.";
             } else {
                 $message = "Successfully connected {$importedCount} Instagram account(s)!";
             }
