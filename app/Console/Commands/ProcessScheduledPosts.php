@@ -60,7 +60,9 @@ class ProcessScheduledPosts extends Command
                     continue;
                 }
                 
-                // Mark post as scheduled
+                $this->info("Processing post ID: {$nextPost->id} for schedule ID: {$schedule->id}");
+                
+                // Mark post as scheduled (this prevents the scheduler from picking it up again)
                 $nextPost->update(['status' => 'scheduled']);
                 
                 // Dispatch the Instagram posting job
@@ -75,7 +77,7 @@ class ProcessScheduledPosts extends Command
                     'current_post_index' => ($schedule->current_post_index ?? 0) + 1
                 ]);
                 
-                $this->info("✓ Schedule ID: {$schedule->id} - Post dispatched successfully");
+                $this->info("✓ Schedule ID: {$schedule->id} - Post ID: {$nextPost->id} dispatched successfully");
                 
             } catch (\Exception $e) {
                 $this->error("✗ Failed to process schedule ID: {$schedule->id} - Error: {$e->getMessage()}");
@@ -124,30 +126,46 @@ class ProcessScheduledPosts extends Command
             
         $currentIndex = $schedule->current_post_index ?? 0;
         
-        // Get the next post based on current index
-        $nextPost = $allPosts->skip($currentIndex)->first();
+        // Get available posts (draft status only - not scheduled, posted, or failed)
+        $availablePosts = $allPosts->where('status', 'draft');
         
-        // Check if this post needs to be posted (is still draft)
-        if ($nextPost && $nextPost->status === 'draft') {
+        // Get the next post based on current index from available posts
+        $nextPost = $availablePosts->skip($currentIndex)->first();
+        
+        if ($nextPost) {
+            $this->info("Found next post to schedule: ID {$nextPost->id} (index: {$currentIndex})");
             return $nextPost;
         }
         
         // If no more draft posts, check if we should mark schedule as completed
         $totalPosts = $allPosts->count();
-        $processedPosts = $allPosts->whereIn('status', ['posted', 'failed'])->count();
+        $completedPosts = $allPosts->whereIn('status', ['posted', 'failed'])->count();
+        $scheduledPosts = $allPosts->where('status', 'scheduled')->count();
         
-        // If all posts have been processed and no repeat cycle, mark as completed
-        if ($processedPosts >= $totalPosts && !$schedule->repeat_cycle) {
+        $this->info("Status check - Total: {$totalPosts}, Completed: {$completedPosts}, Scheduled: {$scheduledPosts}, Draft: {$availablePosts->count()}");
+        
+        // If all posts have been processed (posted/failed) and no repeat cycle, mark as completed
+        if ($completedPosts >= $totalPosts && !$schedule->repeat_cycle) {
             $this->info("All posts processed for schedule ID: {$schedule->id}. Marking as completed.");
             $schedule->update(['status' => 'completed']);
             return null;
         }
         
-        // If repeat cycle is enabled and we've reached the end, reset
-        if ($schedule->repeat_cycle && $currentIndex >= $totalPosts) {
-            $this->info("Repeat cycle enabled for schedule ID: {$schedule->id}. Resetting to first post.");
+        // If repeat cycle is enabled and all posts are completed, reset to beginning
+        if ($schedule->repeat_cycle && $completedPosts >= $totalPosts) {
+            $this->info("Repeat cycle enabled for schedule ID: {$schedule->id}. Resetting all posts to draft and starting over.");
+            
+            // Reset all posts back to draft status for repeat cycle
+            $schedule->contentContainer->posts()->update(['status' => 'draft']);
             $schedule->update(['current_post_index' => 0]);
-            return $allPosts->where('status', 'draft')->first();
+            
+            // Get the first post after reset
+            return $schedule->contentContainer->posts()->orderBy('order')->first();
+        }
+        
+        // If there are still posts being scheduled/processed, wait
+        if ($scheduledPosts > 0) {
+            $this->info("Schedule ID: {$schedule->id} has {$scheduledPosts} posts currently being processed. Waiting...");
         }
         
         return null;
