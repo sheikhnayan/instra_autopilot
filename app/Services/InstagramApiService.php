@@ -477,7 +477,9 @@ class InstagramApiService
     public function refreshAccessToken($accessToken)
     {
         try {
-            $response = $this->client->get($this->graphApiUrl . '/refresh_access_token', [
+            // The correct Instagram Graph API endpoint for refreshing long-lived tokens
+            // Based on Instagram Basic Display API documentation
+            $response = $this->client->get('https://graph.instagram.com/refresh_access_token', [
                 'query' => [
                     'grant_type' => 'ig_refresh_token',
                     'access_token' => $accessToken,
