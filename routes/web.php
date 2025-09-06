@@ -260,3 +260,19 @@ Route::get('/clear-logs', function () {
     
     return response()->json(['error' => 'Log file not found']);
 });
+
+// Debug route for form submissions
+Route::post('/debug-container', function (Request $request) {
+    return response()->json([
+        'method' => $request->method(),
+        'all_data' => $request->all(),
+        'files' => $request->allFiles(),
+        'headers' => $request->headers->all(),
+        'validation_check' => [
+            'has_name' => $request->has('name'),
+            'has_posts' => $request->has('posts'),
+            'posts_is_array' => is_array($request->posts),
+            'posts_count' => is_array($request->posts) ? count($request->posts) : 0,
+        ]
+    ]);
+});

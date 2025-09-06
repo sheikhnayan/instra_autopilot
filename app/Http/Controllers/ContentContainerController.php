@@ -27,12 +27,35 @@ class ContentContainerController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate([
-            'name' => 'required|max:255',
-            'description' => 'nullable|max:1000',
-            'posts' => 'required|array|min:1',
-            'posts.*.caption' => 'required|max:2200',
-            'posts.*.images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:10240', // 10MB max
+        // Add detailed logging
+        \Log::info('Container creation started', [
+            'all_data' => $request->all(),
+            'has_files' => $request->hasFile('posts'),
+            'posts_count' => is_array($request->posts) ? count($request->posts) : 0
+        ]);
+
+        try {
+            $request->validate([
+                'name' => 'required|max:255',
+                'description' => 'nullable|max:1000',
+                'posts' => 'required|array|min:1',
+                'posts.*.caption' => 'required|max:2200',
+                'posts.*.images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:10240', // 10MB max
+            ]);
+            
+            \Log::info('Validation passed');
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            \Log::error('Validation failed', [
+                'errors' => $e->errors(),
+                'request_data' => $request->all()
+            ]);
+            throw $e;
+        }
+
+        \Log::info('Creating container', [
+            'name' => $request->name,
+            'description' => $request->description
         ]);
 
         $container = ContentContainer::create([
@@ -42,7 +65,16 @@ class ContentContainerController extends Controller
             'is_active' => true
         ]);
 
+        \Log::info('Container created', ['container_id' => $container->id]);
+
         foreach ($request->posts as $index => $postData) {
+            \Log::info('Processing post', [
+                'index' => $index,
+                'post_data' => $postData,
+                'has_caption' => isset($postData['caption']),
+                'has_images' => isset($postData['images'])
+            ]);
+
             $imagePaths = [];
             $singleImagePath = null;
             
@@ -74,7 +106,7 @@ class ContentContainerController extends Controller
                 $hashtags = array_filter($hashtags); // Remove empty values
             }
 
-            InstagramPost::create([
+            $post = InstagramPost::create([
                 'content_container_id' => $container->id,
                 'caption' => $postData['caption'],
                 'images' => $imagePaths,
@@ -84,7 +116,11 @@ class ContentContainerController extends Controller
                 'order' => $index + 1,
                 'status' => 'draft'
             ]);
+
+            \Log::info('Post created', ['post_id' => $post->id]);
         }
+
+        \Log::info('Container creation completed successfully', ['container_id' => $container->id]);
 
         return redirect()->route('containers.show', $container)
             ->with('success', 'Container created successfully!');
