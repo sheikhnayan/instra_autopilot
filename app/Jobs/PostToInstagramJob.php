@@ -77,13 +77,13 @@ class PostToInstagramJob implements ShouldQueue
                 return;
             }
 
-            // Temporarily disable multiple images to test single image functionality
-            // TODO: Re-enable after confirming single images work
-            $hasMultipleImages = false; // !empty($this->instagramPost->images) && count($this->instagramPost->images) > 1;
+            // Check if post has multiple images (carousel) or single image
+            $hasMultipleImages = !empty($this->instagramPost->images) && count($this->instagramPost->images) > 1;
             
-            Log::info('Processing Instagram post (multi-image temporarily disabled)', [
+            Log::info('Processing Instagram post', [
                 'post_id' => $this->instagramPost->id,
                 'has_multiple_images' => $hasMultipleImages,
+                'image_count' => $hasMultipleImages ? count($this->instagramPost->images) : 1,
                 'images_data' => $this->instagramPost->images,
                 'image_path' => $this->instagramPost->image_path
             ]);

@@ -48,6 +48,28 @@
                         </button>
                     </div>
 
+                    <!-- Image Requirements Info -->
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <h4 class="text-sm font-medium text-blue-800">Instagram Image Requirements</h4>
+                                <div class="mt-1 text-sm text-blue-700">
+                                    <ul class="list-disc list-inside space-y-1">
+                                        <li><strong>Aspect Ratio:</strong> Between 4:5 (portrait) and 1.91:1 (landscape)</li>
+                                        <li><strong>Carousel Posts:</strong> Square (1:1) images work best for multiple images</li>
+                                        <li><strong>Minimum Size:</strong> At least 320px width and height</li>
+                                        <li><strong>Recommended:</strong> 1080x1080px (square) or 1080x1350px (portrait)</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div id="posts-container" class="space-y-6">
                         <!-- Posts will be added here dynamically -->
                     </div>

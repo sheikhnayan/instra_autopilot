@@ -80,11 +80,31 @@ class ContentContainerController extends Controller
             
             // Handle image uploads
             if (isset($postData['images']) && is_array($postData['images'])) {
-                foreach ($postData['images'] as $image) {
+                foreach ($postData['images'] as $imageIndex => $image) {
                     if ($image && $image->isValid()) {
+                        // Validate image aspect ratio
+                        $validation = $this->validateImageAspectRatio($image);
+                        if (!$validation['valid']) {
+                            Log::warning('Image validation failed', [
+                                'post_index' => $index,
+                                'image_index' => $imageIndex,
+                                'message' => $validation['message'],
+                                'filename' => $image->getClientOriginalName()
+                            ]);
+                            
+                            return redirect()->back()
+                                ->withErrors(['posts.' . $index . '.images.' . $imageIndex => $validation['message']])
+                                ->withInput();
+                        }
+
                         $filename = time() . '_' . $index . '_' . $image->getClientOriginalName();
                         $path = $image->storeAs('posts', $filename, 'public');
                         $imagePaths[] = '/storage/' . $path;
+                        
+                        Log::info('Image uploaded successfully', [
+                            'filename' => $filename,
+                            'validation_message' => $validation['message']
+                        ]);
                         
                         // Store the first image as the primary image path
                         if ($singleImagePath === null) {
@@ -254,5 +274,57 @@ class ContentContainerController extends Controller
 
         return redirect()->route('containers.edit', $containerId)
             ->with('success', 'Post deleted successfully!');
+    }
+
+    /**
+     * Validate image aspect ratio for Instagram requirements
+     */
+    private function validateImageAspectRatio($image)
+    {
+        try {
+            // Get image dimensions
+            $imageInfo = getimagesize($image->getPathname());
+            if (!$imageInfo) {
+                return ['valid' => false, 'message' => 'Could not read image dimensions'];
+            }
+
+            $width = $imageInfo[0];
+            $height = $imageInfo[1];
+            $aspectRatio = $width / $height;
+
+            // Instagram requirements:
+            // Single posts: 4:5 (0.8) to 1.91:1 (1.91)
+            // Carousel posts: 4:5 (0.8) to 1:1 (1.0) - square is safest
+            
+            $minRatio = 0.8;  // 4:5 (portrait)
+            $maxRatio = 1.91; // 1.91:1 (landscape)
+            
+            if ($aspectRatio < $minRatio) {
+                return [
+                    'valid' => false, 
+                    'message' => 'Image too tall - Instagram requires aspect ratio between 4:5 and 1.91:1. Current: ' . round($aspectRatio, 2)
+                ];
+            }
+            
+            if ($aspectRatio > $maxRatio) {
+                return [
+                    'valid' => false, 
+                    'message' => 'Image too wide - Instagram requires aspect ratio between 4:5 and 1.91:1. Current: ' . round($aspectRatio, 2)
+                ];
+            }
+
+            // Check minimum dimensions
+            if ($width < 320 || $height < 320) {
+                return [
+                    'valid' => false, 
+                    'message' => 'Image too small - Instagram requires at least 320px width and height. Current: ' . $width . 'x' . $height
+                ];
+            }
+
+            return ['valid' => true, 'message' => 'Image meets Instagram requirements'];
+
+        } catch (Exception $e) {
+            return ['valid' => false, 'message' => 'Error validating image: ' . $e->getMessage()];
+        }
     }
 }
