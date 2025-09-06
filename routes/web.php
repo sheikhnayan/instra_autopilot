@@ -44,7 +44,7 @@ Route::get('/test-instagram-post', function(InstagramApiService $service) {
         }
         
         // Get the first draft post
-        $post = App\Models\InstagramPost::where('status', 'draft')->latest()->first();
+        $post = App\Models\InstagramPost::latest()->first();
         
         if (!$post) {
             return response()->json([
