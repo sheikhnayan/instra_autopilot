@@ -77,23 +77,29 @@ class PostToInstagramJob implements ShouldQueue
                 return;
             }
 
-            // Check if post has multiple images (carousel) or single image
-            $hasMultipleImages = !empty($this->instagramPost->images) && count($this->instagramPost->images) > 1;
+            // Temporarily disable multiple images to test single image functionality
+            // TODO: Re-enable after confirming single images work
+            $hasMultipleImages = false; // !empty($this->instagramPost->images) && count($this->instagramPost->images) > 1;
             
-            Log::info('Processing Instagram post', [
+            Log::info('Processing Instagram post (multi-image temporarily disabled)', [
                 'post_id' => $this->instagramPost->id,
                 'has_multiple_images' => $hasMultipleImages,
-                'image_count' => $hasMultipleImages ? count($this->instagramPost->images) : 1,
-                'images_data' => $this->instagramPost->images
+                'images_data' => $this->instagramPost->images,
+                'image_path' => $this->instagramPost->image_path
             ]);
 
             if ($hasMultipleImages) {
                 // Handle carousel post (multiple images)
                 $imageUrls = [];
                 foreach ($this->instagramPost->images as $imagePath) {
-                    // Remove leading slash if present and ensure proper URL format
+                    // Clean the path and create proper URL
                     $cleanPath = ltrim($imagePath, '/');
-                    $imageUrls[] = config('app.url') . '/' . $cleanPath;
+                    // Check if it's already a full URL or needs to be constructed
+                    if (str_starts_with($cleanPath, 'http')) {
+                        $imageUrls[] = $cleanPath;
+                    } else {
+                        $imageUrls[] = config('app.url') . '/' . $cleanPath;
+                    }
                 }
 
                 Log::info('Posting carousel with URLs', ['urls' => $imageUrls]);
@@ -111,11 +117,16 @@ class PostToInstagramJob implements ShouldQueue
                 
                 // Try to get image from images array first, then fallback to image_path
                 if (!empty($this->instagramPost->images) && isset($this->instagramPost->images[0])) {
-                    $cleanPath = ltrim($this->instagramPost->images[0], '/');
-                    $imageUrl = config('app.url') . '/' . $cleanPath;
+                    $imagePath = $this->instagramPost->images[0];
+                    $cleanPath = ltrim($imagePath, '/');
+                    if (str_starts_with($cleanPath, 'http')) {
+                        $imageUrl = $cleanPath;
+                    } else {
+                        $imageUrl = config('app.url') . '/' . $cleanPath;
+                    }
                 } elseif ($this->instagramPost->image_path) {
-                    $imageUrl = Storage::url($this->instagramPost->image_path);
-                    $imageUrl = config('app.url') . $imageUrl;
+                    $storageUrl = Storage::url($this->instagramPost->image_path);
+                    $imageUrl = config('app.url') . $storageUrl;
                 }
 
                 if (!$imageUrl) {
