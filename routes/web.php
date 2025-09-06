@@ -66,7 +66,7 @@ Route::get('/test-instagram-post', function(InstagramApiService $service) {
             'post' => [
                 'id' => $post->id,
                 'caption' => substr($post->caption, 0, 100) . '...',
-                'image_path' => $post->image_path,
+                'image_path' => $post->images[0],
                 'status' => $post->status,
             ],
             'tests' => []
@@ -81,11 +81,11 @@ Route::get('/test-instagram-post', function(InstagramApiService $service) {
         }
         
         // Test 2: Image URL accessibility
-        $imageUrl = config('app.url') . '/storage/' . $post->image_path;
+        $imageUrl = config('app.url') . '/storage/' . $post->images[0];
         $result['tests']['image_url'] = $imageUrl;
         
         // Check if image file exists
-        $imagePath = storage_path('app/public/' . $post->image_path);
+        $imagePath = storage_path('app/public/' . $post->images[0]);
         $result['tests']['image_exists'] = file_exists($imagePath) ? 'PASS' : 'FAIL';
         
         // Test 3: Try actual posting (if requested)
