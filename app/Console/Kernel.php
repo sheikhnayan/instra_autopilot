@@ -18,11 +18,11 @@ class Kernel extends ConsoleKernel
                  ->withoutOverlapping()
                  ->runInBackground();
                  
-        // Proactively refresh Instagram tokens daily
-        $schedule->job(new \App\Jobs\ProactiveTokenRefreshJob)
-                 ->daily()
-                 ->withoutOverlapping()
-                 ->runInBackground();
+        // Proactive token refresh disabled - using long-lived tokens from auth
+        // $schedule->job(new \App\Jobs\ProactiveTokenRefreshJob)
+        //          ->daily()
+        //          ->withoutOverlapping()
+        //          ->runInBackground();
                  
         // Clean up failed jobs daily
         $schedule->command('queue:prune-failed --hours=48')
