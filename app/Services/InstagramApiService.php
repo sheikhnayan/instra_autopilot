@@ -134,16 +134,38 @@ class InstagramApiService
     {
         $instagramAccounts = [];
         
+        Log::info('Getting Instagram accounts', ['token_length' => strlen($userAccessToken)]);
+        
         // Get all Facebook Pages
         $pagesResponse = $this->getFacebookPages($userAccessToken);
         
+        Log::info('Pages response', [
+            'success' => (bool)$pagesResponse,
+            'has_data' => $pagesResponse && isset($pagesResponse['data']),
+            'page_count' => $pagesResponse && isset($pagesResponse['data']) ? count($pagesResponse['data']) : 0,
+            'response' => $pagesResponse
+        ]);
+        
         if (!$pagesResponse || !isset($pagesResponse['data'])) {
+            Log::warning('No pages found or invalid response');
             return [];
         }
 
         foreach ($pagesResponse['data'] as $page) {
+            Log::info('Processing page', [
+                'page_id' => $page['id'],
+                'page_name' => $page['name'],
+                'has_instagram_account' => isset($page['instagram_business_account'])
+            ]);
+            
             // Get Instagram account for each page
             $igAccount = $this->getInstagramBusinessAccount($page['access_token'], $page['id']);
+            
+            Log::info('Instagram account response', [
+                'page_id' => $page['id'],
+                'ig_response' => $igAccount,
+                'has_ig_account' => $igAccount && isset($igAccount['instagram_business_account'])
+            ]);
             
             if ($igAccount && isset($igAccount['instagram_business_account'])) {
                 $instagramAccounts[] = [
@@ -154,6 +176,11 @@ class InstagramApiService
                 ];
             }
         }
+
+        Log::info('Final Instagram accounts', [
+            'count' => count($instagramAccounts),
+            'accounts' => $instagramAccounts
+        ]);
 
         return $instagramAccounts;
     }
@@ -297,6 +324,46 @@ class InstagramApiService
             $result = json_decode($response->getBody()->getContents(), true);
             return isset($result['id']);
         } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Get user info for debugging
+     */
+    public function getUserInfo($accessToken)
+    {
+        try {
+            $response = $this->client->get('https://graph.facebook.com/v18.0/me', [
+                'query' => [
+                    'fields' => 'id,name,email',
+                    'access_token' => $accessToken,
+                ]
+            ]);
+
+            return json_decode($response->getBody()->getContents(), true);
+        } catch (RequestException $e) {
+            Log::error('Get User Info Error: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Get user pages for debugging
+     */
+    public function getUserPages($accessToken)
+    {
+        try {
+            $response = $this->client->get('https://graph.facebook.com/v18.0/me/accounts', [
+                'query' => [
+                    'fields' => 'id,name,access_token,instagram_business_account',
+                    'access_token' => $accessToken,
+                ]
+            ]);
+
+            return json_decode($response->getBody()->getContents(), true);
+        } catch (RequestException $e) {
+            Log::error('Get User Pages Error: ' . $e->getMessage());
             return false;
         }
     }

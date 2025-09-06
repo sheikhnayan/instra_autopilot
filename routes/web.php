@@ -215,3 +215,48 @@ Route::delete('posts/{post}', [ContentContainerController::class, 'deletePost'])
 // Schedules
 Route::resource('schedules', ScheduleController::class);
 Route::post('schedules/{schedule}/toggle', [ScheduleController::class, 'toggle'])->name('schedules.toggle');
+
+// Log viewer route for debugging
+Route::get('/view-logs', function () {
+    $logFile = storage_path('logs/laravel.log');
+    
+    if (!file_exists($logFile)) {
+        return response()->json(['error' => 'Log file not found']);
+    }
+    
+    // Get last 200 lines of the log file
+    $lines = [];
+    $file = new SplFileObject($logFile);
+    $file->seek(PHP_INT_MAX);
+    $totalLines = $file->key();
+    
+    $startLine = max(0, $totalLines - 200); // Get last 200 lines
+    $file->seek($startLine);
+    
+    while (!$file->eof()) {
+        $line = $file->fgets();
+        if ($line) {
+            $lines[] = $line;
+        }
+    }
+    
+    $content = '<h2>Laravel Logs (Last 200 lines)</h2>';
+    $content .= '<p><a href="/clear-logs">Clear Logs</a> | <a href="/view-logs">Refresh</a></p>';
+    $content .= '<pre style="background: #000; color: #fff; padding: 20px; overflow: auto; max-height: 80vh;">';
+    $content .= htmlspecialchars(implode('', $lines));
+    $content .= '</pre>';
+    
+    return response($content)->header('Content-Type', 'text/html');
+});
+
+// Clear logs route
+Route::get('/clear-logs', function () {
+    $logFile = storage_path('logs/laravel.log');
+    
+    if (file_exists($logFile)) {
+        file_put_contents($logFile, '');
+        return redirect('/view-logs')->with('success', 'Logs cleared');
+    }
+    
+    return response()->json(['error' => 'Log file not found']);
+});

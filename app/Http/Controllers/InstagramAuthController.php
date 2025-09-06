@@ -62,8 +62,28 @@ class InstagramAuthController extends Controller
             $expiresIn = $longLivedTokenResponse['expires_in'] ?? 3600;
             
             // Step 3: Get all Instagram accounts
+            Log::info('Attempting to get Instagram accounts with token', [
+                'token_length' => strlen($userAccessToken),
+                'token_starts_with' => substr($userAccessToken, 0, 20) . '...'
+            ]);
+            
             $instagramAccounts = $this->instagramService->getAllInstagramAccounts($userAccessToken);
-            dd($instagramAccounts);
+            
+            Log::info('Instagram accounts result', [
+                'count' => count($instagramAccounts),
+                'accounts' => $instagramAccounts
+            ]);
+            
+            // Debug: Let's also try to get user info and pages
+            try {
+                $userInfo = $this->instagramService->getUserInfo($userAccessToken);
+                Log::info('User info', ['user' => $userInfo]);
+                
+                $pages = $this->instagramService->getUserPages($userAccessToken);
+                Log::info('User pages', ['pages' => $pages]);
+            } catch (\Exception $e) {
+                Log::error('Debug API calls failed', ['error' => $e->getMessage()]);
+            }
 
             if (empty($instagramAccounts)) {
                 return redirect()->route('dashboard')->with('error', 'No Instagram Business accounts found. Make sure your Instagram accounts are connected to Facebook Pages and converted to Business/Creator accounts.');
