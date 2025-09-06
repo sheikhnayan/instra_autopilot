@@ -60,6 +60,7 @@ class InstagramAuthController extends Controller
             
             $userAccessToken = $longLivedTokenResponse['access_token'] ?? $tokenResponse['access_token'];
             $expiresIn = $longLivedTokenResponse['expires_in'] ?? 3600;
+            dd($userAccessToken, $expiresIn);
 
             // Step 3: Get all Instagram accounts
             $instagramAccounts = $this->instagramService->getAllInstagramAccounts($userAccessToken);
