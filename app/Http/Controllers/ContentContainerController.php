@@ -104,7 +104,7 @@ class ContentContainerController extends Controller
                         
                         \Log::info('Image uploaded successfully', [
                             'filename' => $filename,
-                            'validation_message' => $validation['message']
+                            // 'validation_message' => $validation['message']
                         ]);
                         
                         // Store the first image as the primary image path
