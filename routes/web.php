@@ -81,7 +81,7 @@ Route::get('/test-instagram-post', function(InstagramApiService $service) {
         }
         
         // Test 2: Image URL accessibility
-        $imageUrl = config('app.url') . '/storage/' . $post->images[0];
+        $imageUrl = config('app.url') . $post->images[0];
         $result['tests']['image_url'] = $imageUrl;
         
         // Check if image file exists
