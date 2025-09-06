@@ -30,6 +30,177 @@ Route::get('/test-instagram-api', function(InstagramApiService $service) {
     ]);
 })->name('test.instagram.api');
 
+// Test route for immediate Instagram posting
+Route::get('/test-instagram-post', function(InstagramApiService $service) {
+    try {
+        // Get the first active Instagram account
+        $account = App\Models\InstagramAccount::where('is_active', true)->first();
+        
+        if (!$account) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No active Instagram account found'
+            ], 404);
+        }
+        
+        // Get the first draft post
+        $post = App\Models\InstagramPost::where('status', 'draft')->first();
+        
+        if (!$post) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No draft posts found'
+            ], 404);
+        }
+        
+        // Test the posting process
+        $result = [
+            'status' => 'testing',
+            'account' => [
+                'id' => $account->id,
+                'username' => $account->username,
+                'has_access_token' => !empty($account->access_token),
+                'has_page_token' => !empty($account->facebook_page_access_token),
+                'business_account_id' => $account->instagram_business_account_id,
+            ],
+            'post' => [
+                'id' => $post->id,
+                'caption' => substr($post->caption, 0, 100) . '...',
+                'image_path' => $post->image_path,
+                'status' => $post->status,
+            ],
+            'tests' => []
+        ];
+        
+        // Test 1: Token validation
+        try {
+            $tokenValid = $service->validateToken($account->access_token);
+            $result['tests']['token_validation'] = $tokenValid ? 'PASS' : 'FAIL';
+        } catch (Exception $e) {
+            $result['tests']['token_validation'] = 'ERROR: ' . $e->getMessage();
+        }
+        
+        // Test 2: Image URL accessibility
+        $imageUrl = config('app.url') . '/storage/' . $post->image_path;
+        $result['tests']['image_url'] = $imageUrl;
+        
+        // Check if image file exists
+        $imagePath = storage_path('app/public/' . $post->image_path);
+        $result['tests']['image_exists'] = file_exists($imagePath) ? 'PASS' : 'FAIL';
+        
+        // Test 3: Try actual posting (if requested)
+        if (request()->get('actually_post') === 'yes') {
+            try {
+                // Dispatch the job
+                App\Jobs\PostToInstagramJob::dispatch($account, $post);
+                $result['tests']['job_dispatched'] = 'PASS - Job added to queue';
+                $result['message'] = 'Job dispatched successfully! Check queue worker for results.';
+            } catch (Exception $e) {
+                $result['tests']['job_dispatched'] = 'ERROR: ' . $e->getMessage();
+            }
+        } else {
+            $result['tests']['job_dispatch'] = 'SKIPPED - Add ?actually_post=yes to dispatch real job';
+        }
+        
+        return response()->json($result);
+        
+    } catch (Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ], 500);
+    }
+})->name('test.instagram.post');
+
+// Test route for manual Instagram posting (immediate execution)
+Route::get('/test-instagram-post-now', function(InstagramApiService $service) {
+    try {
+        // Get the first active Instagram account
+        $account = App\Models\InstagramAccount::where('is_active', true)->first();
+        
+        if (!$account) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No active Instagram account found'
+            ], 404);
+        }
+        
+        // Get the first draft post
+        $post = App\Models\InstagramPost::where('status', 'draft')->first();
+        
+        if (!$post) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No draft posts found'
+            ], 404);
+        }
+        
+        // Execute the posting logic directly (not via queue)
+        $result = [
+            'status' => 'attempting_post',
+            'account' => $account->username,
+            'post_id' => $post->id,
+            'caption' => substr($post->caption, 0, 50) . '...'
+        ];
+        
+        // Check requirements
+        if (!$account->access_token || !$account->facebook_page_access_token || !$account->instagram_business_account_id) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Missing required Instagram account tokens or business account ID',
+                'details' => [
+                    'has_access_token' => !empty($account->access_token),
+                    'has_page_token' => !empty($account->facebook_page_access_token),
+                    'has_business_id' => !empty($account->instagram_business_account_id)
+                ]
+            ], 400);
+        }
+        
+        // Get image URL
+        $imageUrl = config('app.url') . '/storage/' . $post->image_path;
+        
+        // Try to post using the service
+        $postResult = $service->postPhoto(
+            $account->facebook_page_access_token,
+            $account->instagram_business_account_id,
+            $imageUrl,
+            $post->caption
+        );
+        
+        if ($postResult && isset($postResult['id'])) {
+            // Update post status
+            $post->update([
+                'status' => 'posted',
+                'instagram_media_id' => $postResult['id'],
+                'posted_at' => now(),
+                'error_message' => null
+            ]);
+            
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Post published successfully!',
+                'instagram_media_id' => $postResult['id'],
+                'post_id' => $post->id,
+                'posted_at' => now()->toDateTimeString()
+            ]);
+        } else {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to post to Instagram',
+                'api_response' => $postResult
+            ], 500);
+        }
+        
+    } catch (Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ], 500);
+    }
+})->name('test.instagram.post.now');
+
 // Instagram Accounts
 Route::resource('accounts', InstagramAccountController::class);
 
