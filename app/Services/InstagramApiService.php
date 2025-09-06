@@ -88,6 +88,38 @@ class InstagramApiService
     }
 
     /**
+     * Exchange short-lived Instagram access token for long-lived token (60 days)
+     * This is specifically for Instagram Basic Display API tokens
+     */
+    public function getLongLivedInstagramToken($shortLivedToken)
+    {
+        try {
+            $response = $this->client->get('https://graph.instagram.com/access_token', [
+                'query' => [
+                    'grant_type' => 'ig_exchange_token',
+                    'client_secret' => $this->clientSecret,
+                    'access_token' => $shortLivedToken,
+                ]
+            ]);
+
+            $result = json_decode($response->getBody()->getContents(), true);
+            
+            Log::info('Instagram long-lived token exchange successful', [
+                'token_type' => $result['token_type'] ?? 'unknown',
+                'expires_in' => $result['expires_in'] ?? 'unknown'
+            ]);
+            
+            return $result;
+        } catch (RequestException $e) {
+            Log::error('Instagram Long-Lived Token Exchange Error', [
+                'error' => $e->getMessage(),
+                'response' => $e->hasResponse() ? $e->getResponse()->getBody()->getContents() : null
+            ]);
+            return false;
+        }
+    }
+
+    /**
      * Get all Facebook Pages managed by the user
      */
     public function getFacebookPages($userAccessToken)
@@ -472,13 +504,13 @@ class InstagramApiService
     }
 
     /**
-     * Refresh access token
+     * Refresh Instagram long-lived access token
+     * This refreshes an existing long-lived token to get a new 60-day token
      */
     public function refreshAccessToken($accessToken)
     {
         try {
             // The correct Instagram Graph API endpoint for refreshing long-lived tokens
-            // Based on Instagram Basic Display API documentation
             $response = $this->client->get('https://graph.instagram.com/refresh_access_token', [
                 'query' => [
                     'grant_type' => 'ig_refresh_token',
@@ -488,7 +520,7 @@ class InstagramApiService
 
             $result = json_decode($response->getBody()->getContents(), true);
             
-            Log::info('Token refresh successful', [
+            Log::info('Instagram token refresh successful', [
                 'access_token_type' => $result['token_type'] ?? 'unknown',
                 'expires_in' => $result['expires_in'] ?? 'unknown'
             ]);
