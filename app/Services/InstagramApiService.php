@@ -387,6 +387,70 @@ class InstagramApiService
     }
 
     /**
+     * Post an Instagram Story
+     */
+    public function postStory($accessToken, $instagramAccountId, $imageUrl, $stickers = [])
+    {
+        Log::info('Starting story post creation', [
+            'instagram_account_id' => $instagramAccountId,
+            'image_url' => $imageUrl,
+            'stickers' => $stickers
+        ]);
+
+        // Step 1: Create story media object
+        $mediaResponse = $this->createStoryMediaObject($accessToken, $instagramAccountId, $imageUrl, $stickers);
+        
+        if (!$mediaResponse || !isset($mediaResponse['id'])) {
+            Log::error('Failed to create story media object', ['response' => $mediaResponse]);
+            return false;
+        }
+
+        // Step 2: Wait for processing
+        sleep(2);
+
+        // Step 3: Publish the story
+        $publishResponse = $this->publishMedia($accessToken, $instagramAccountId, $mediaResponse['id']);
+        
+        Log::info('Story post completed', ['publish_response' => $publishResponse]);
+        
+        return $publishResponse;
+    }
+
+    /**
+     * Create story media object
+     */
+    private function createStoryMediaObject($accessToken, $instagramAccountId, $imageUrl, $stickers = [])
+    {
+        try {
+            $params = [
+                'image_url' => $imageUrl,
+                'media_type' => 'STORIES',
+                'access_token' => $accessToken,
+            ];
+
+            // Add story stickers if provided
+            if (!empty($stickers)) {
+                // Instagram Stories support various stickers like polls, questions, etc.
+                // This is a basic implementation - can be expanded for specific sticker types
+                foreach ($stickers as $sticker) {
+                    if (isset($sticker['type']) && isset($sticker['data'])) {
+                        $params[$sticker['type']] = json_encode($sticker['data']);
+                    }
+                }
+            }
+
+            $response = $this->client->post("https://graph.facebook.com/v18.0/{$instagramAccountId}/media", [
+                'form_params' => $params
+            ]);
+
+            return json_decode($response->getBody()->getContents(), true);
+        } catch (RequestException $e) {
+            Log::error('Instagram API Error creating story media: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Get user's media
      */
     public function getUserMedia($accessToken, $limit = 25)

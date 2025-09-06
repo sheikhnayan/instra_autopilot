@@ -57,18 +57,7 @@ class ProcessScheduledPosts extends Command
                 
                 if (!$nextPost) {
                     $this->info("No more posts to publish for schedule ID: {$schedule->id}");
-                    
-                    if ($schedule->repeat_cycle) {
-                        // Reset to first post if repeat cycle is enabled
-                        $schedule->update(['current_post_index' => 0]);
-                        $nextPost = $this->getNextPost($schedule);
-                    }
-                    
-                    if (!$nextPost) {
-                        // Mark schedule as completed if no repeat cycle
-                        $schedule->update(['status' => 'completed']);
-                        continue;
-                    }
+                    continue;
                 }
                 
                 // Mark post as scheduled
@@ -129,13 +118,38 @@ class ProcessScheduledPosts extends Command
      */
     private function getNextPost($schedule)
     {
-        $posts = $schedule->contentContainer->posts()
-            ->where('status', 'draft')
+        $allPosts = $schedule->contentContainer->posts()
             ->orderBy('order')
             ->get();
             
         $currentIndex = $schedule->current_post_index ?? 0;
         
-        return $posts->skip($currentIndex)->first();
+        // Get the next post based on current index
+        $nextPost = $allPosts->skip($currentIndex)->first();
+        
+        // Check if this post needs to be posted (is still draft)
+        if ($nextPost && $nextPost->status === 'draft') {
+            return $nextPost;
+        }
+        
+        // If no more draft posts, check if we should mark schedule as completed
+        $totalPosts = $allPosts->count();
+        $processedPosts = $allPosts->whereIn('status', ['posted', 'failed'])->count();
+        
+        // If all posts have been processed and no repeat cycle, mark as completed
+        if ($processedPosts >= $totalPosts && !$schedule->repeat_cycle) {
+            $this->info("All posts processed for schedule ID: {$schedule->id}. Marking as completed.");
+            $schedule->update(['status' => 'completed']);
+            return null;
+        }
+        
+        // If repeat cycle is enabled and we've reached the end, reset
+        if ($schedule->repeat_cycle && $currentIndex >= $totalPosts) {
+            $this->info("Repeat cycle enabled for schedule ID: {$schedule->id}. Resetting to first post.");
+            $schedule->update(['current_post_index' => 0]);
+            return $allPosts->where('status', 'draft')->first();
+        }
+        
+        return null;
     }
 }

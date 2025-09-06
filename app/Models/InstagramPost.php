@@ -13,6 +13,9 @@ class InstagramPost extends Model
         'image_path',
         'hashtags',
         'post_type',
+        'is_story',
+        'story_stickers',
+        'story_duration',
         'order',
         'status',
         'posted_at',
@@ -23,6 +26,8 @@ class InstagramPost extends Model
     protected $casts = [
         'images' => 'array',
         'hashtags' => 'array',
+        'story_stickers' => 'array',
+        'is_story' => 'boolean',
         'posted_at' => 'datetime'
     ];
 
