@@ -84,25 +84,25 @@ class ContentContainerController extends Controller
                 foreach ($postData['images'] as $imageIndex => $image) {
                     if ($image && $image->isValid()) {
                         // Validate image aspect ratio
-                        $validation = $this->validateImageAspectRatio($image);
-                        if (!$validation['valid']) {
-                            Log::warning('Image validation failed', [
-                                'post_index' => $index,
-                                'image_index' => $imageIndex,
-                                'message' => $validation['message'],
-                                'filename' => $image->getClientOriginalName()
-                            ]);
+                        // $validation = $this->validateImageAspectRatio($image);
+                        // if (!$validation['valid']) {
+                        //     \Log::warning('Image validation failed', [
+                        //         'post_index' => $index,
+                        //         'image_index' => $imageIndex,
+                        //         'message' => $validation['message'],
+                        //         'filename' => $image->getClientOriginalName()
+                        //     ]);
                             
-                            return redirect()->back()
-                                ->withErrors(['posts.' . $index . '.images.' . $imageIndex => $validation['message']])
-                                ->withInput();
-                        }
+                        //     return redirect()->back()
+                        //         ->withErrors(['posts.' . $index . '.images.' . $imageIndex => $validation['message']])
+                        //         ->withInput();
+                        // }
 
                         $filename = time() . '_' . $index . '_' . $image->getClientOriginalName();
                         $path = $image->storeAs('posts', $filename, 'public');
                         $imagePaths[] = '/storage/' . $path;
                         
-                        Log::info('Image uploaded successfully', [
+                        \Log::info('Image uploaded successfully', [
                             'filename' => $filename,
                             'validation_message' => $validation['message']
                         ]);
@@ -224,12 +224,6 @@ class ContentContainerController extends Controller
         $container->delete();
         return redirect()->route('containers.index')
             ->with('success', 'Container deleted successfully!');
-    }
-
-    public function posts(ContentContainer $container)
-    {
-        $container->load('posts');
-        return view('containers.posts', compact('container'));
     }
 
     public function updatePost(Request $request, InstagramPost $post)
