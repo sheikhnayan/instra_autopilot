@@ -60,10 +60,10 @@ class InstagramAuthController extends Controller
             
             $userAccessToken = $longLivedTokenResponse['access_token'] ?? $tokenResponse['access_token'];
             $expiresIn = $longLivedTokenResponse['expires_in'] ?? 3600;
-            dd($userAccessToken, $expiresIn);
-
+            
             // Step 3: Get all Instagram accounts
             $instagramAccounts = $this->instagramService->getAllInstagramAccounts($userAccessToken);
+            dd($instagramAccounts);
 
             if (empty($instagramAccounts)) {
                 return redirect()->route('dashboard')->with('error', 'No Instagram Business accounts found. Make sure your Instagram accounts are connected to Facebook Pages and converted to Business/Creator accounts.');
