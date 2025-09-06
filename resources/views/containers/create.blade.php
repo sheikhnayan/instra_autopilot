@@ -57,13 +57,13 @@
                                 </svg>
                             </div>
                             <div class="ml-3">
-                                <h4 class="text-sm font-medium text-blue-800">Instagram Image Requirements</h4>
+                                <h4 class="text-sm font-medium text-blue-800">Instagram Content Requirements</h4>
                                 <div class="mt-1 text-sm text-blue-700">
                                     <ul class="list-disc list-inside space-y-1">
-                                        <li><strong>Aspect Ratio:</strong> Between 4:5 (portrait) and 1.91:1 (landscape)</li>
+                                        <li><strong>Posts:</strong> Aspect ratio between 4:5 (portrait) and 1.91:1 (landscape)</li>
+                                        <li><strong>Stories:</strong> 9:16 aspect ratio (1080x1920px recommended)</li>
                                         <li><strong>Carousel Posts:</strong> Square (1:1) images work best for multiple images</li>
                                         <li><strong>Minimum Size:</strong> At least 320px width and height</li>
-                                        <li><strong>Recommended:</strong> 1080x1080px (square) or 1080x1350px (portrait)</li>
                                     </ul>
                                 </div>
                             </div>
@@ -89,6 +89,9 @@
     </div>
 </div>
 
+<!-- Include Story Preview Component -->
+@include('components.story-preview')
+
 @push('scripts')
 <script>
 let postIndex = 0;
@@ -99,6 +102,23 @@ function addPost() {
             <div class="flex items-center justify-between mb-4">
                 <h4 class="font-medium text-gray-900">Post ${postIndex + 1}</h4>
                 <button type="button" class="remove-post text-red-600 hover:text-red-800 text-sm">Remove</button>
+            </div>
+            
+            <!-- Post Type Selection -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Content Type *</label>
+                <div class="flex space-x-4">
+                    <label class="flex items-center">
+                        <input type="radio" name="posts[${postIndex}][post_type]" value="photo" checked
+                               class="post-type-radio mr-2" data-post-index="${postIndex}">
+                        <span class="text-sm text-gray-700">📷 Regular Post</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="radio" name="posts[${postIndex}][post_type]" value="story"
+                               class="post-type-radio mr-2" data-post-index="${postIndex}">
+                        <span class="text-sm text-gray-700">📱 Instagram Story</span>
+                    </label>
+                </div>
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -119,8 +139,8 @@ function addPost() {
                             </svg>
                             <p class="text-sm text-gray-500">Click to upload images</p>
                             <p class="text-xs text-gray-400">PNG, JPG, GIF up to 10MB each</p>
-                            <div class="mt-2 p-2 bg-blue-50 rounded-md">
-                                <p class="text-xs text-blue-700 font-medium">📏 Instagram Requirements:</p>
+                            <div class="mt-2 p-2 bg-blue-50 rounded-md image-requirements" id="requirements-${postIndex}">
+                                <p class="text-xs text-blue-700 font-medium">📏 Regular Post Requirements:</p>
                                 <p class="text-xs text-blue-600">• Single image: 4:5 to 1.91:1 aspect ratio</p>
                                 <p class="text-xs text-blue-600">• Multiple images: 4:5 to 1:1 (square) aspect ratio</p>
                                 <p class="text-xs text-blue-600">• Minimum 320px wide, recommended 1080px</p>
@@ -141,6 +161,43 @@ function addPost() {
                        placeholder="#hashtag1 #hashtag2 #hashtag3">
                 <p class="text-xs text-gray-500 mt-1">Separate hashtags with spaces</p>
             </div>
+            
+            <!-- Story-specific options (hidden by default) -->
+            <div class="story-options mt-4 hidden" id="story-options-${postIndex}">
+                <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                    <h5 class="text-sm font-medium text-purple-800 mb-3">📱 Instagram Story Options</h5>
+                    
+                    <!-- Story Duration -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Story Duration (seconds)</label>
+                        <select name="posts[${postIndex}][story_duration]" 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                            <option value="10">10 seconds</option>
+                            <option value="15" selected>15 seconds (recommended)</option>
+                            <option value="20">20 seconds</option>
+                            <option value="30">30 seconds</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Interactive Stickers -->
+                    <div class="mb-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="block text-sm font-medium text-gray-700">Interactive Elements</label>
+                            <button type="button" onclick="openStoryPreview(${postIndex})" 
+                                    class="text-purple-600 hover:text-purple-800 text-sm font-medium">
+                                👁️ Preview Story
+                            </button>
+                        </div>
+                        <div class="space-y-3" id="stickers-container-${postIndex}">
+                            <!-- Stickers will be added here -->
+                        </div>
+                        <button type="button" class="mt-2 bg-purple-600 text-white px-3 py-1 rounded text-sm hover:bg-purple-700 transition-colors"
+                                onclick="addSticker(${postIndex})">
+                            + Add Interactive Element
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     `;
     
@@ -150,6 +207,14 @@ function addPost() {
     const fileInput = document.getElementById(`images-${postIndex}`);
     fileInput.addEventListener('change', function(e) {
         handleImageUpload(e.target);
+    });
+    
+    // Add event listener for post type radio buttons
+    const postTypeRadios = document.querySelectorAll(`input[name="posts[${postIndex}][post_type]"]`);
+    postTypeRadios.forEach(radio => {
+        radio.addEventListener('change', function() {
+            toggleStoryOptions(postIndex, this.value);
+        });
     });
     
     postIndex++;
@@ -252,6 +317,175 @@ document.getElementById('container-form').addEventListener('submit', function(e)
 document.addEventListener('DOMContentLoaded', function() {
     addPost();
 });
+
+// Toggle story options based on post type
+function toggleStoryOptions(postIndex, postType) {
+    const storyOptions = document.getElementById(`story-options-${postIndex}`);
+    const imageRequirements = document.getElementById(`requirements-${postIndex}`);
+    
+    if (postType === 'story') {
+        storyOptions.classList.remove('hidden');
+        imageRequirements.innerHTML = `
+            <p class="text-xs text-purple-700 font-medium">📱 Instagram Story Requirements:</p>
+            <p class="text-xs text-purple-600">• Aspect ratio: 9:16 (vertical)</p>
+            <p class="text-xs text-purple-600">• Recommended: 1080x1920px</p>
+            <p class="text-xs text-purple-600">• Single image only for stories</p>
+        `;
+        
+        // Update file input to only accept single file for stories
+        const fileInput = document.getElementById(`images-${postIndex}`);
+        fileInput.removeAttribute('multiple');
+        
+    } else {
+        storyOptions.classList.add('hidden');
+        imageRequirements.innerHTML = `
+            <p class="text-xs text-blue-700 font-medium">📏 Regular Post Requirements:</p>
+            <p class="text-xs text-blue-600">• Single image: 4:5 to 1.91:1 aspect ratio</p>
+            <p class="text-xs text-blue-600">• Multiple images: 4:5 to 1:1 (square) aspect ratio</p>
+            <p class="text-xs text-blue-600">• Minimum 320px wide, recommended 1080px</p>
+        `;
+        
+        // Re-enable multiple file selection for regular posts
+        const fileInput = document.getElementById(`images-${postIndex}`);
+        fileInput.setAttribute('multiple', 'multiple');
+    }
+}
+
+// Add interactive sticker to story
+let stickerIndex = 0;
+function addSticker(postIndex) {
+    const stickersContainer = document.getElementById(`stickers-container-${postIndex}`);
+    const stickerHtml = `
+        <div class="sticker-item border border-purple-200 rounded-lg p-3 bg-white" data-sticker-index="${stickerIndex}">
+            <div class="flex items-center justify-between mb-2">
+                <select name="posts[${postIndex}][stickers][${stickerIndex}][type]" 
+                        class="sticker-type-select text-sm border border-gray-300 rounded px-2 py-1"
+                        onchange="updateStickerOptions(${postIndex}, ${stickerIndex}, this.value)">
+                    <option value="">Select Type</option>
+                    <option value="poll">🗳️ Poll</option>
+                    <option value="question">❓ Question</option>
+                    <option value="mention">👤 Mention</option>
+                    <option value="hashtag"># Hashtag</option>
+                    <option value="location">📍 Location</option>
+                </select>
+                <button type="button" onclick="removeSticker(this)" 
+                        class="text-red-600 hover:text-red-800 text-sm">Remove</button>
+            </div>
+            
+            <div class="sticker-options" id="sticker-options-${postIndex}-${stickerIndex}">
+                <p class="text-xs text-gray-500">Select a sticker type above to configure options</p>
+            </div>
+            
+            <!-- Position controls -->
+            <div class="mt-2 grid grid-cols-2 gap-2">
+                <div>
+                    <label class="text-xs text-gray-600">X Position (0.0-1.0)</label>
+                    <input type="number" name="posts[${postIndex}][stickers][${stickerIndex}][position_x]" 
+                           min="0" max="1" step="0.1" value="0.5"
+                           class="w-full text-xs px-2 py-1 border border-gray-300 rounded">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-600">Y Position (0.0-1.0)</label>
+                    <input type="number" name="posts[${postIndex}][stickers][${stickerIndex}][position_y]" 
+                           min="0" max="1" step="0.1" value="0.5"
+                           class="w-full text-xs px-2 py-1 border border-gray-300 rounded">
+                </div>
+            </div>
+        </div>
+    `;
+    
+    stickersContainer.insertAdjacentHTML('beforeend', stickerHtml);
+    stickerIndex++;
+}
+
+// Update sticker options based on type
+function updateStickerOptions(postIndex, stickerIndex, stickerType) {
+    const optionsContainer = document.getElementById(`sticker-options-${postIndex}-${stickerIndex}`);
+    let optionsHtml = '';
+    
+    switch(stickerType) {
+        case 'poll':
+            optionsHtml = `
+                <div class="space-y-2">
+                    <div>
+                        <label class="text-xs text-gray-600">Poll Question</label>
+                        <input type="text" name="posts[${postIndex}][stickers][${stickerIndex}][text]" 
+                               placeholder="What's your question?"
+                               class="w-full text-sm px-2 py-1 border border-gray-300 rounded">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-xs text-gray-600">Option 1</label>
+                            <input type="text" name="posts[${postIndex}][stickers][${stickerIndex}][option1]" 
+                                   placeholder="Yes" value="Yes"
+                                   class="w-full text-sm px-2 py-1 border border-gray-300 rounded">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-600">Option 2</label>
+                            <input type="text" name="posts[${postIndex}][stickers][${stickerIndex}][option2]" 
+                                   placeholder="No" value="No"
+                                   class="w-full text-sm px-2 py-1 border border-gray-300 rounded">
+                        </div>
+                    </div>
+                </div>
+            `;
+            break;
+            
+        case 'question':
+            optionsHtml = `
+                <div>
+                    <label class="text-xs text-gray-600">Question Prompt</label>
+                    <input type="text" name="posts[${postIndex}][stickers][${stickerIndex}][text]" 
+                           placeholder="Ask me anything!"
+                           class="w-full text-sm px-2 py-1 border border-gray-300 rounded">
+                </div>
+            `;
+            break;
+            
+        case 'mention':
+            optionsHtml = `
+                <div>
+                    <label class="text-xs text-gray-600">Username (without @)</label>
+                    <input type="text" name="posts[${postIndex}][stickers][${stickerIndex}][username]" 
+                           placeholder="username"
+                           class="w-full text-sm px-2 py-1 border border-gray-300 rounded">
+                </div>
+            `;
+            break;
+            
+        case 'hashtag':
+            optionsHtml = `
+                <div>
+                    <label class="text-xs text-gray-600">Hashtag (without #)</label>
+                    <input type="text" name="posts[${postIndex}][stickers][${stickerIndex}][text]" 
+                           placeholder="hashtag"
+                           class="w-full text-sm px-2 py-1 border border-gray-300 rounded">
+                </div>
+            `;
+            break;
+            
+        case 'location':
+            optionsHtml = `
+                <div>
+                    <label class="text-xs text-gray-600">Location Name</label>
+                    <input type="text" name="posts[${postIndex}][stickers][${stickerIndex}][location_name]" 
+                           placeholder="New York, NY"
+                           class="w-full text-sm px-2 py-1 border border-gray-300 rounded">
+                </div>
+            `;
+            break;
+            
+        default:
+            optionsHtml = '<p class="text-xs text-gray-500">Select a sticker type above to configure options</p>';
+    }
+    
+    optionsContainer.innerHTML = optionsHtml;
+}
+
+// Remove sticker
+function removeSticker(button) {
+    button.closest('.sticker-item').remove();
+}
 </script>
 @endpush
 @endsection

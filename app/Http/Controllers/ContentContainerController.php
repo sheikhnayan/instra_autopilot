@@ -41,6 +41,11 @@ class ContentContainerController extends Controller
                 'description' => 'nullable|max:1000',
                 'posts' => 'required|array|min:1',
                 'posts.*.caption' => 'required|max:2200',
+                'posts.*.post_type' => 'nullable|in:photo,story',
+                'posts.*.story_duration' => 'nullable|integer|min:5|max:60',
+                'posts.*.stickers.*.type' => 'nullable|in:poll,question,mention,hashtag,location',
+                'posts.*.stickers.*.position_x' => 'nullable|numeric|min:0|max:1',
+                'posts.*.stickers.*.position_y' => 'nullable|numeric|min:0|max:1',
                 'posts.*.images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:10240', // 10MB max
             ]);
             
@@ -127,13 +132,80 @@ class ContentContainerController extends Controller
                 $hashtags = array_filter($hashtags); // Remove empty values
             }
 
+            // Determine if this is a story or regular post
+            $isStory = isset($postData['post_type']) && $postData['post_type'] === 'story';
+            $storyStickers = [];
+            $storyDuration = 15; // Default duration
+
+            // Process story-specific data
+            if ($isStory) {
+                // Set story duration
+                if (isset($postData['story_duration']) && is_numeric($postData['story_duration'])) {
+                    $storyDuration = (int)$postData['story_duration'];
+                }
+
+                // Process interactive stickers
+                if (isset($postData['stickers']) && is_array($postData['stickers'])) {
+                    foreach ($postData['stickers'] as $stickerData) {
+                        if (isset($stickerData['type']) && !empty($stickerData['type'])) {
+                            $sticker = [
+                                'sticker_type' => $stickerData['type'],
+                                'position' => [
+                                    'x' => floatval($stickerData['position_x'] ?? 0.5),
+                                    'y' => floatval($stickerData['position_y'] ?? 0.5)
+                                ]
+                            ];
+
+                            // Add type-specific data
+                            switch ($stickerData['type']) {
+                                case 'poll':
+                                    $sticker['text'] = $stickerData['text'] ?? '';
+                                    $sticker['options'] = [
+                                        $stickerData['option1'] ?? 'Yes',
+                                        $stickerData['option2'] ?? 'No'
+                                    ];
+                                    break;
+
+                                case 'question':
+                                    $sticker['text'] = $stickerData['text'] ?? 'Ask me anything!';
+                                    break;
+
+                                case 'mention':
+                                    $sticker['username'] = '@' . ltrim($stickerData['username'] ?? '', '@');
+                                    break;
+
+                                case 'hashtag':
+                                    $sticker['text'] = '#' . ltrim($stickerData['text'] ?? '', '#');
+                                    break;
+
+                                case 'location':
+                                    $sticker['location_name'] = $stickerData['location_name'] ?? '';
+                                    break;
+                            }
+
+                            $storyStickers[] = $sticker;
+                        }
+                    }
+                }
+
+                \Log::info('Story data processed', [
+                    'is_story' => $isStory,
+                    'story_duration' => $storyDuration,
+                    'stickers_count' => count($storyStickers),
+                    'stickers' => $storyStickers
+                ]);
+            }
+
             $post = InstagramPost::create([
                 'content_container_id' => $container->id,
                 'caption' => $postData['caption'],
                 'images' => $imagePaths,
                 'image_path' => $singleImagePath,
                 'hashtags' => $hashtags,
-                'post_type' => 'photo',
+                'post_type' => $isStory ? 'story' : 'photo',
+                'is_story' => $isStory,
+                'story_stickers' => $isStory ? $storyStickers : null,
+                'story_duration' => $isStory ? $storyDuration : 15,
                 'order' => $index + 1,
                 'status' => 'draft'
             ]);
