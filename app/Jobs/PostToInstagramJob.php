@@ -77,8 +77,54 @@ class PostToInstagramJob implements ShouldQueue
                 return;
             }
 
-            // Check if post has multiple images (carousel) or single image
-            $hasMultipleImages = !empty($this->instagramPost->images) && count($this->instagramPost->images) > 1;
+            // Check if this is a story or regular post
+            if ($this->instagramPost->is_story) {
+                // Handle Instagram Story
+                $imageUrl = null;
+                
+                if (!empty($this->instagramPost->images) && isset($this->instagramPost->images[0])) {
+                    $imagePath = $this->instagramPost->images[0];
+                    $cleanPath = ltrim($imagePath, '/');
+                    if (str_starts_with($cleanPath, 'http')) {
+                        $imageUrl = $cleanPath;
+                    } else {
+                        $imageUrl = config('app.url') . '/' . $cleanPath;
+                    }
+                } elseif ($this->instagramPost->image_path) {
+                    $storageUrl = Storage::url($this->instagramPost->image_path);
+                    $imageUrl = config('app.url') . $storageUrl;
+                }
+
+                if (!$imageUrl) {
+                    Log::error('No image found for story', [
+                        'post_id' => $this->instagramPost->id,
+                        'images' => $this->instagramPost->images,
+                        'image_path' => $this->instagramPost->image_path
+                    ]);
+                    
+                    $this->instagramPost->update([
+                        'status' => 'failed',
+                        'error_message' => 'No image found for story posting'
+                    ]);
+                    return;
+                }
+
+                Log::info('Posting Instagram Story', [
+                    'post_id' => $this->instagramPost->id,
+                    'image_url' => $imageUrl,
+                    'story_stickers' => $this->instagramPost->story_stickers
+                ]);
+
+                // Post story to Instagram using Graph API
+                $result = $instagramService->postStory(
+                    $pageAccessToken,
+                    $instagramBusinessAccountId,
+                    $imageUrl,
+                    $this->instagramPost->story_stickers ?? []
+                );
+            } else {
+                // Handle regular post - Check if post has multiple images (carousel) or single image
+                $hasMultipleImages = !empty($this->instagramPost->images) && count($this->instagramPost->images) > 1;
             
             Log::info('Processing Instagram post', [
                 'post_id' => $this->instagramPost->id,
@@ -153,6 +199,7 @@ class PostToInstagramJob implements ShouldQueue
                     $this->instagramPost->caption
                 );
             }
+            } // End of else block for regular posts
 
             if ($result && isset($result['id'])) {
                 // Success
