@@ -43,10 +43,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile/edit', [App\Http\Controllers\ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [App\Http\Controllers\ProfileController::class, 'update'])->name('profile.update');
 
-    // Token testing routes
-    Route::get('/test/token-refresh', [App\Http\Controllers\TokenTestController::class, 'testTokenRefresh'])->name('test.token.refresh');
-    Route::get('/test/token-status', [App\Http\Controllers\TokenTestController::class, 'getTokenStatus'])->name('test.token.status');
-    Route::get('/test/posting-with-refresh', [App\Http\Controllers\TokenTestController::class, 'testPostingWithRefresh'])->name('test.posting.refresh');
+
 });
 
 // Test route for Instagram API
