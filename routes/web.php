@@ -66,7 +66,7 @@ Route::get('/test-instagram-post', function(InstagramApiService $service) {
             'post' => [
                 'id' => $post->id,
                 'caption' => substr($post->caption, 0, 100) . '...',
-                'image_path' => '/storage'.'/'.$post->image_path,
+                'image_path' => $post->image_path,
                 'status' => $post->status,
             ],
             'tests' => []
