@@ -61,17 +61,19 @@ class InstagramAuthController extends Controller
             $userAccessToken = $longLivedTokenResponse['access_token'] ?? $tokenResponse['access_token'];
             $expiresIn = $longLivedTokenResponse['expires_in'] ?? 3600;
             
-            // Step 3: Get all Instagram accounts
+            // Step 3: Get Instagram accounts (with limits for server performance)
             Log::info('Attempting to get Instagram accounts with token', [
                 'token_length' => strlen($userAccessToken),
-                'token_starts_with' => substr($userAccessToken, 0, 20) . '...'
+                'token_starts_with' => substr($userAccessToken, 0, 20) . '...',
+                'server_memory_limit' => ini_get('memory_limit'),
+                'current_memory_usage' => round(memory_get_usage(true) / 1024 / 1024, 2) . 'MB'
             ]);
             
             $instagramAccounts = $this->instagramService->getAllInstagramAccounts($userAccessToken);
             
             Log::info('Instagram accounts result', [
                 'count' => count($instagramAccounts),
-                'accounts' => $instagramAccounts
+                'memory_after_fetch' => round(memory_get_usage(true) / 1024 / 1024, 2) . 'MB'
             ]);
             
             // Debug: Let's also try to get user info and pages

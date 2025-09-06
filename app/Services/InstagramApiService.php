@@ -125,41 +125,67 @@ class InstagramApiService
     public function getFacebookPages($userAccessToken)
     {
         try {
-            // First, let's check what permissions we have
-            $permissionsResponse = $this->client->get('https://graph.facebook.com/v18.0/me/permissions', [
-                'query' => [
-                    'access_token' => $userAccessToken,
-                ]
-            ]);
+            $allPages = [];
+            $nextUrl = null;
+            $processedCount = 0;
+            $maxPages = 100; // Limit to prevent server overload on 512MB RAM
+            $batchSize = 25; // Process in smaller batches
             
-            $permissions = json_decode($permissionsResponse->getBody()->getContents(), true);
-            Log::info('User permissions', ['permissions' => $permissions]);
+            Log::info('Starting to fetch Facebook pages', ['max_pages' => $maxPages, 'batch_size' => $batchSize]);
             
-            $response = $this->client->get('https://graph.facebook.com/v18.0/me/accounts', [
-                'query' => [
-                    'access_token' => $userAccessToken,
-                    'fields' => 'id,name,access_token,instagram_business_account,tasks,category'
-                ]
-            ]);
+            do {
+                if ($nextUrl) {
+                    $response = $this->client->get($nextUrl);
+                } else {
+                    $response = $this->client->get('https://graph.facebook.com/v18.0/me/accounts', [
+                        'query' => [
+                            'access_token' => $userAccessToken,
+                            'fields' => 'id,name,access_token,instagram_business_account,tasks,category',
+                            'limit' => $batchSize
+                        ]
+                    ]);
+                }
 
-            $result = json_decode($response->getBody()->getContents(), true);
-            
-            // Also try to get business pages specifically
-            try {
-                $businessResponse = $this->client->get('https://graph.facebook.com/v18.0/me', [
-                    'query' => [
-                        'access_token' => $userAccessToken,
-                        'fields' => 'accounts{id,name,access_token,instagram_business_account,tasks,category}'
-                    ]
-                ]);
+                $result = json_decode($response->getBody()->getContents(), true);
                 
-                $businessResult = json_decode($businessResponse->getBody()->getContents(), true);
-                Log::info('Business accounts query', ['result' => $businessResult]);
-            } catch (RequestException $e) {
-                Log::info('Business accounts query failed', ['error' => $e->getMessage()]);
-            }
+                if (isset($result['data'])) {
+                    $allPages = array_merge($allPages, $result['data']);
+                    $processedCount += count($result['data']);
+                    
+                    Log::info('Fetched batch of pages', [
+                        'batch_count' => count($result['data']),
+                        'total_count' => $processedCount,
+                        'memory_usage' => memory_get_usage(true) . ' bytes'
+                    ]);
+                }
+                
+                // Get next page URL if exists
+                $nextUrl = $result['paging']['next'] ?? null;
+                
+                // Safety limit to prevent server overload
+                if ($processedCount >= $maxPages) {
+                    Log::warning('Reached maximum page limit to prevent server overload', [
+                        'processed' => $processedCount,
+                        'limit' => $maxPages,
+                        'has_more' => (bool)$nextUrl
+                    ]);
+                    break;
+                }
+                
+                // Add delay to prevent rate limiting and reduce server load
+                if ($nextUrl) {
+                    usleep(200000); // 200ms delay
+                }
+                
+            } while ($nextUrl && $processedCount < $maxPages);
             
-            return $result;
+            Log::info('Finished fetching Facebook pages', [
+                'total_pages' => count($allPages),
+                'has_more_available' => (bool)$nextUrl,
+                'memory_peak' => memory_get_peak_usage(true) . ' bytes'
+            ]);
+            
+            return ['data' => $allPages];
             
         } catch (RequestException $e) {
             Log::error('Facebook Pages API Error: ' . $e->getMessage());
@@ -191,22 +217,27 @@ class InstagramApiService
     }
 
     /**
-     * Get all Instagram accounts accessible through Facebook Pages
+     * Get all Instagram accounts accessible through Facebook Pages (optimized for low memory)
      */
     public function getAllInstagramAccounts($userAccessToken)
     {
         $instagramAccounts = [];
+        $processedPages = 0;
+        $maxProcessingTime = 30; // seconds
+        $startTime = time();
         
-        Log::info('Getting Instagram accounts', ['token_length' => strlen($userAccessToken)]);
+        Log::info('Getting Instagram accounts', [
+            'token_length' => strlen($userAccessToken),
+            'max_processing_time' => $maxProcessingTime . 's'
+        ]);
         
-        // Get all Facebook Pages
+        // Get Facebook Pages with pagination
         $pagesResponse = $this->getFacebookPages($userAccessToken);
         
         Log::info('Pages response', [
             'success' => (bool)$pagesResponse,
             'has_data' => $pagesResponse && isset($pagesResponse['data']),
-            'page_count' => $pagesResponse && isset($pagesResponse['data']) ? count($pagesResponse['data']) : 0,
-            'response' => $pagesResponse
+            'page_count' => $pagesResponse && isset($pagesResponse['data']) ? count($pagesResponse['data']) : 0
         ]);
         
         if (!$pagesResponse || !isset($pagesResponse['data'])) {
@@ -215,34 +246,63 @@ class InstagramApiService
         }
 
         foreach ($pagesResponse['data'] as $page) {
+            // Check processing time limit to prevent timeout
+            if (time() - $startTime > $maxProcessingTime) {
+                Log::warning('Processing time limit reached', [
+                    'processed_pages' => $processedPages,
+                    'total_pages' => count($pagesResponse['data']),
+                    'processing_time' => time() - $startTime . 's'
+                ]);
+                break;
+            }
+            
             Log::info('Processing page', [
                 'page_id' => $page['id'],
                 'page_name' => $page['name'],
-                'has_instagram_account' => isset($page['instagram_business_account'])
+                'processed_count' => $processedPages + 1,
+                'memory_usage' => round(memory_get_usage(true) / 1024 / 1024, 2) . 'MB'
             ]);
             
-            // Get Instagram account for each page
-            $igAccount = $this->getInstagramBusinessAccount($page['access_token'], $page['id']);
-            
-            Log::info('Instagram account response', [
-                'page_id' => $page['id'],
-                'ig_response' => $igAccount,
-                'has_ig_account' => $igAccount && isset($igAccount['instagram_business_account'])
-            ]);
-            
-            if ($igAccount && isset($igAccount['instagram_business_account'])) {
-                $instagramAccounts[] = [
-                    'facebook_page_id' => $page['id'],
-                    'facebook_page_name' => $page['name'],
-                    'facebook_page_access_token' => $page['access_token'],
-                    'instagram_account' => $igAccount['instagram_business_account']
-                ];
+            try {
+                // Get Instagram account for each page
+                $igAccount = $this->getInstagramBusinessAccount($page['access_token'], $page['id']);
+                
+                if ($igAccount && isset($igAccount['instagram_business_account'])) {
+                    $instagramAccounts[] = [
+                        'facebook_page_id' => $page['id'],
+                        'facebook_page_name' => $page['name'],
+                        'facebook_page_access_token' => $page['access_token'],
+                        'instagram_account' => $igAccount['instagram_business_account']
+                    ];
+                    
+                    Log::info('Found Instagram account', [
+                        'username' => $igAccount['instagram_business_account']['username'] ?? 'unknown',
+                        'ig_account_id' => $igAccount['instagram_business_account']['id'] ?? 'unknown'
+                    ]);
+                } else {
+                    Log::debug('No Instagram account for page', ['page_id' => $page['id']]);
+                }
+                
+                $processedPages++;
+                
+                // Add small delay to reduce server load and prevent rate limiting
+                usleep(150000); // 150ms delay
+                
+            } catch (\Exception $e) {
+                Log::error('Error processing page', [
+                    'page_id' => $page['id'],
+                    'error' => $e->getMessage()
+                ]);
+                continue;
             }
         }
 
         Log::info('Final Instagram accounts', [
-            'count' => count($instagramAccounts),
-            'accounts' => $instagramAccounts
+            'total_accounts_found' => count($instagramAccounts),
+            'pages_processed' => $processedPages,
+            'total_pages' => count($pagesResponse['data']),
+            'processing_time' => time() - $startTime . 's',
+            'memory_peak' => round(memory_get_peak_usage(true) / 1024 / 1024, 2) . 'MB'
         ]);
 
         return $instagramAccounts;
