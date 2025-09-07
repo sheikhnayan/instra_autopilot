@@ -34,6 +34,7 @@ class ScheduleController extends Controller
             'name' => 'required|max:255',
             'content_container_id' => 'required|exists:content_containers,id',
             'instagram_account_id' => 'required|exists:instagram_accounts,id',
+            'start_date' => 'required|date',
             'start_time' => 'required',
             'interval_minutes' => 'required|integer|min:15|max:1440',
             'repeat_cycle' => 'boolean'
@@ -41,7 +42,26 @@ class ScheduleController extends Controller
 
         // Convert start_date and start_time to New York timezone for storage
         $nyTimezone = new \DateTimeZone('America/New_York');
-        $startDateTime = $request->start_date . ' ' . $request->start_time;
+        
+        // Get the start date and time from request
+        $startDate = $request->start_date;
+        $startTime = $request->start_time;
+        
+        // If no start_date provided, default to today
+        if (empty($startDate)) {
+            $startDate = date('Y-m-d');
+        }
+        
+        $startDateTime = $startDate . ' ' . $startTime;
+        
+        // Debug the date values
+        \Log::info('Schedule creation debug', [
+            'request_start_date' => $request->start_date,
+            'final_start_date' => $startDate,
+            'start_time' => $startTime,
+            'combined' => $startDateTime
+        ]);
+        
         $startDateTimeNY = \Carbon\Carbon::createFromFormat('Y-m-d H:i', $startDateTime, $nyTimezone);
 
         Schedule::create([
