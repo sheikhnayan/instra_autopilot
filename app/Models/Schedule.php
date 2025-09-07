@@ -21,7 +21,6 @@ class Schedule extends Model
 
     protected $casts = [
         'start_date' => 'date',
-        'start_time' => 'datetime:H:i',
         'last_posted_at' => 'datetime',
         'repeat_cycle' => 'boolean'
     ];

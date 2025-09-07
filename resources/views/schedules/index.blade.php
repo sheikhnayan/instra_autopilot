@@ -46,7 +46,7 @@
                             <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                                 <path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                             </svg>
-                            Start: {{ $schedule->start_date->format('M j, Y') }} at {{ $schedule->start_time }}
+                            Start: {{ $schedule->start_date->format('M j, Y') }} at {{ \Carbon\Carbon::parse($schedule->start_time)->format('g:i A') }}
                         </div>
                         <div class="flex items-center">
                             <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
