@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Jobs\ProcessScheduledPostsJob;
 use App\Models\Schedule;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
 class ProcessScheduledPosts extends Command
