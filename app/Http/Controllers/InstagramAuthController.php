@@ -61,7 +61,7 @@ class InstagramAuthController extends Controller
             $userAccessToken = $longLivedTokenResponse['access_token'] ?? $tokenResponse['access_token'];
             $expiresIn = $longLivedTokenResponse['expires_in'] ?? 3600;
             
-            // Step 3: Get Instagram accounts using existing working method
+            // Step 3: Import first batch immediately, then continue in background
             Log::info('Starting Instagram account import process', [
                 'token_length' => strlen($userAccessToken),
                 'token_starts_with' => substr($userAccessToken, 0, 20) . '...',
@@ -69,23 +69,14 @@ class InstagramAuthController extends Controller
                 'current_memory_usage' => round(memory_get_usage(true) / 1024 / 1024, 2) . 'MB'
             ]);
             
-            // Use the existing working method that got you 37 accounts
-            $instagramAccounts = $this->instagramService->getAllInstagramAccounts($userAccessToken);
+            // Import first batch immediately to show immediate results
+            $firstBatchResult = $this->instagramService->getInstagramAccountsFirstBatch($userAccessToken);
             
-            Log::info('Instagram accounts result', [
-                'count' => count($instagramAccounts),
-                'memory_after_fetch' => round(memory_get_usage(true) / 1024 / 1024, 2) . 'MB'
-            ]);
-
-            if (empty($instagramAccounts)) {
-                return redirect()->route('dashboard')->with('error', 'No Instagram Business accounts found. Make sure your Instagram accounts are connected to Facebook Pages and converted to Business/Creator accounts.');
-            }
-
             $importedCount = 0;
             $errors = [];
 
-            // Process all accounts from the existing working method
-            foreach ($instagramAccounts as $accountData) {
+            // Process the immediate batch accounts
+            foreach ($firstBatchResult['accounts'] as $accountData) {
                 try {
                     $igAccount = $accountData['instagram_account'];
                     
@@ -118,15 +109,25 @@ class InstagramAuthController extends Controller
                 }
             }
 
-            // Check if there might be more accounts available
-            if ($importedCount >= 100) {
-                Log::info('Imported maximum batch size, there might be more accounts available', [
-                    'imported_count' => $importedCount
+            // Queue background job to continue importing ALL remaining accounts
+            if ($firstBatchResult['has_more_pages']) {
+                Log::info('Queueing background import for ALL remaining accounts', [
+                    'immediate_import' => $importedCount,
+                    'starting_page' => $firstBatchResult['processed_pages'],
+                    'has_more_pages' => true
                 ]);
-                
-                $message = "Successfully connected {$importedCount} Instagram account(s)! If you have more accounts, try reconnecting to import additional batches.";
+
+                // Queue comprehensive background import
+                \App\Jobs\ImportInstagramAccountsBatch::dispatch(
+                    $userAccessToken,
+                    null, // will start from beginning of pagination
+                    1,    // batch number
+                    50    // allow up to 50 batches (50 * 25 = 1250 accounts max)
+                )->delay(now()->addSeconds(5)); // Start quickly
+
+                $message = "Successfully connected {$importedCount} Instagram account(s) immediately! Your remaining accounts (potentially 200+ more) are being imported automatically in the background. Check back in 10-15 minutes to see ALL your accounts.";
             } else {
-                $message = "Successfully connected {$importedCount} Instagram account(s)!";
+                $message = "Successfully connected {$importedCount} Instagram account(s)! All your available accounts have been imported.";
             }
             
             if (!empty($errors)) {

@@ -219,16 +219,17 @@ class InstagramApiService
     /**
      * Get all Instagram accounts accessible through Facebook Pages (optimized for low memory)
      */
-    public function getAllInstagramAccounts($userAccessToken)
+    public function getAllInstagramAccounts($userAccessToken, $startFromPage = 0)
     {
         $instagramAccounts = [];
         $processedPages = 0;
-        $maxProcessingTime = 30; // seconds
+        $maxProcessingTime = 45; // increased from 30 to 45 seconds
         $startTime = time();
         
         Log::info('Getting Instagram accounts', [
             'token_length' => strlen($userAccessToken),
-            'max_processing_time' => $maxProcessingTime . 's'
+            'max_processing_time' => $maxProcessingTime . 's',
+            'start_from_page' => $startFromPage
         ]);
         
         // Get Facebook Pages with pagination
@@ -245,13 +246,19 @@ class InstagramApiService
             return [];
         }
 
-        foreach ($pagesResponse['data'] as $page) {
+        foreach ($pagesResponse['data'] as $index => $page) {
+            // Skip pages if we're starting from a specific page
+            if ($index < $startFromPage) {
+                continue;
+            }
+            
             // Check processing time limit to prevent timeout
             if (time() - $startTime > $maxProcessingTime) {
                 Log::warning('Processing time limit reached', [
                     'processed_pages' => $processedPages,
                     'total_pages' => count($pagesResponse['data']),
-                    'processing_time' => time() - $startTime . 's'
+                    'processing_time' => time() - $startTime . 's',
+                    'remaining_pages' => count($pagesResponse['data']) - $processedPages
                 ]);
                 break;
             }
@@ -259,6 +266,7 @@ class InstagramApiService
             Log::info('Processing page', [
                 'page_id' => $page['id'],
                 'page_name' => $page['name'],
+                'page_index' => $index,
                 'processed_count' => $processedPages + 1,
                 'memory_usage' => round(memory_get_usage(true) / 1024 / 1024, 2) . 'MB'
             ]);
@@ -285,8 +293,8 @@ class InstagramApiService
                 
                 $processedPages++;
                 
-                // Add small delay to reduce server load and prevent rate limiting
-                usleep(150000); // 150ms delay
+                // Reduced delay to process more pages within time limit
+                usleep(100000); // 100ms delay (reduced from 150ms)
                 
             } catch (\Exception $e) {
                 Log::error('Error processing page', [
@@ -306,6 +314,145 @@ class InstagramApiService
         ]);
 
         return $instagramAccounts;
+    }
+
+    /**
+     * Get first batch of Instagram accounts quickly for immediate display
+     */
+    public function getInstagramAccountsFirstBatch($userAccessToken)
+    {
+        $instagramAccounts = [];
+        $processedPages = 0;
+        $maxProcessingTime = 25; // Quick first batch
+        $maxPagesToProcess = 50; // Process first 50 pages quickly
+        $startTime = time();
+        
+        Log::info('Getting first batch of Instagram accounts', [
+            'token_length' => strlen($userAccessToken),
+            'max_processing_time' => $maxProcessingTime . 's',
+            'max_pages_to_process' => $maxPagesToProcess
+        ]);
+        
+        // Get first batch of Facebook Pages
+        $pagesResponse = $this->getFacebookPagesLimited($userAccessToken, $maxPagesToProcess);
+        
+        Log::info('First batch pages response', [
+            'success' => (bool)$pagesResponse,
+            'has_data' => $pagesResponse && isset($pagesResponse['data']),
+            'page_count' => $pagesResponse && isset($pagesResponse['data']) ? count($pagesResponse['data']) : 0
+        ]);
+        
+        if (!$pagesResponse || !isset($pagesResponse['data'])) {
+            Log::warning('No pages found in first batch');
+            return ['accounts' => [], 'has_more_pages' => false, 'processed_pages' => 0];
+        }
+
+        foreach ($pagesResponse['data'] as $page) {
+            // Quick timeout check
+            if (time() - $startTime > $maxProcessingTime) {
+                Log::info('First batch time limit reached', [
+                    'processed_pages' => $processedPages,
+                    'processing_time' => time() - $startTime . 's'
+                ]);
+                break;
+            }
+            
+            try {
+                // Get Instagram account for each page
+                $igAccount = $this->getInstagramBusinessAccount($page['access_token'], $page['id']);
+                
+                if ($igAccount && isset($igAccount['instagram_business_account'])) {
+                    $instagramAccounts[] = [
+                        'facebook_page_id' => $page['id'],
+                        'facebook_page_name' => $page['name'],
+                        'facebook_page_access_token' => $page['access_token'],
+                        'instagram_account' => $igAccount['instagram_business_account']
+                    ];
+                    
+                    Log::info('Found Instagram account in first batch', [
+                        'username' => $igAccount['instagram_business_account']['username'] ?? 'unknown'
+                    ]);
+                }
+                
+                $processedPages++;
+                
+                // Minimal delay for first batch
+                usleep(50000); // 50ms delay
+                
+            } catch (\Exception $e) {
+                Log::error('Error processing page in first batch', [
+                    'page_id' => $page['id'],
+                    'error' => $e->getMessage()
+                ]);
+                continue;
+            }
+        }
+
+        $hasMorePages = $pagesResponse['has_more_available'] || $processedPages < count($pagesResponse['data']);
+
+        Log::info('First batch completed', [
+            'accounts_found' => count($instagramAccounts),
+            'pages_processed' => $processedPages,
+            'has_more_pages' => $hasMorePages,
+            'processing_time' => time() - $startTime . 's'
+        ]);
+
+        return [
+            'accounts' => $instagramAccounts,
+            'has_more_pages' => $hasMorePages,
+            'processed_pages' => $processedPages
+        ];
+    }
+
+    /**
+     * Get limited number of Facebook pages for first batch
+     */
+    private function getFacebookPagesLimited($userAccessToken, $maxPages = 50)
+    {
+        try {
+            $allPages = [];
+            $nextUrl = null;
+            $processedCount = 0;
+            $batchSize = 25;
+            
+            do {
+                if ($nextUrl) {
+                    $response = $this->client->get($nextUrl);
+                } else {
+                    $response = $this->client->get('https://graph.facebook.com/v18.0/me/accounts', [
+                        'query' => [
+                            'access_token' => $userAccessToken,
+                            'fields' => 'id,name,access_token,instagram_business_account,tasks,category',
+                            'limit' => $batchSize
+                        ]
+                    ]);
+                }
+
+                $result = json_decode($response->getBody()->getContents(), true);
+                
+                if (isset($result['data'])) {
+                    $allPages = array_merge($allPages, $result['data']);
+                    $processedCount += count($result['data']);
+                }
+                
+                $nextUrl = $result['paging']['next'] ?? null;
+                
+                // Stop at max pages for first batch
+                if ($processedCount >= $maxPages) {
+                    break;
+                }
+                
+            } while ($nextUrl && $processedCount < $maxPages);
+            
+            return [
+                'data' => $allPages,
+                'has_more_available' => (bool)$nextUrl || $processedCount >= $maxPages
+            ];
+            
+        } catch (RequestException $e) {
+            Log::error('Facebook Pages Limited API Error: ' . $e->getMessage());
+            return false;
+        }
     }
 
     /**
