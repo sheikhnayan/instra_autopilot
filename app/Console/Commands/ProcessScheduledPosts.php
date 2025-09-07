@@ -29,14 +29,26 @@ class ProcessScheduledPosts extends Command
     public function handle()
     {
         $this->info('Starting to process scheduled posts...');
+        
+        // Add debug logging
+        Log::info('ProcessScheduledPosts command started', [
+            'timestamp' => now()->toDateTimeString(),
+            'memory_usage' => memory_get_usage(true)
+        ]);
 
         // Get all active schedules that are ready to execute
         $schedules = Schedule::where('status', 'active')
             ->with(['instagramAccount', 'contentContainer.posts'])
             ->get();
 
+        Log::info('Found schedules', [
+            'count' => $schedules->count(),
+            'schedule_ids' => $schedules->pluck('id')->toArray()
+        ]);
+
         if ($schedules->isEmpty()) {
             $this->info('No schedules ready for execution.');
+            Log::info('No active schedules found');
             return;
         }
 
@@ -141,18 +153,31 @@ class ProcessScheduledPosts extends Command
         $totalPosts = $allPosts->count();
         $completedPosts = $allPosts->whereIn('status', ['posted', 'failed'])->count();
         $scheduledPosts = $allPosts->where('status', 'scheduled')->count();
+        $draftPosts = $availablePosts->count();
         
-        $this->info("Status check - Total: {$totalPosts}, Completed: {$completedPosts}, Scheduled: {$scheduledPosts}, Draft: {$availablePosts->count()}");
+        $this->info("Status check - Total: {$totalPosts}, Completed: {$completedPosts}, Scheduled: {$scheduledPosts}, Draft: {$draftPosts}");
+        
+        // If there are still draft posts available, something is wrong with the index logic
+        if ($draftPosts > 0) {
+            $this->info("Found {$draftPosts} draft posts but couldn't get next post. Resetting index to 0.");
+            $schedule->update(['current_post_index' => 0]);
+            
+            // Try to get the first draft post
+            $firstDraftPost = $availablePosts->first();
+            if ($firstDraftPost) {
+                return $firstDraftPost;
+            }
+        }
         
         // If all posts have been processed (posted/failed) and no repeat cycle, mark as completed
-        if ($completedPosts >= $totalPosts && !$schedule->repeat_cycle) {
+        if ($draftPosts == 0 && $completedPosts >= $totalPosts && !$schedule->repeat_cycle) {
             $this->info("All posts processed for schedule ID: {$schedule->id}. Marking as completed.");
             $schedule->update(['status' => 'completed']);
             return null;
         }
         
-        // If repeat cycle is enabled and all posts are completed, reset to beginning
-        if ($schedule->repeat_cycle && $completedPosts >= $totalPosts) {
+        // If repeat cycle is enabled and no draft posts remain, reset all posts to draft
+        if ($schedule->repeat_cycle && $draftPosts == 0) {
             $this->info("Repeat cycle enabled for schedule ID: {$schedule->id}. Resetting all posts to draft and starting over.");
             
             // Reset all posts back to draft status for repeat cycle
@@ -168,6 +193,7 @@ class ProcessScheduledPosts extends Command
             $this->info("Schedule ID: {$schedule->id} has {$scheduledPosts} posts currently being processed. Waiting...");
         }
         
+        $this->info("No more posts to publish for schedule ID: {$schedule->id}");
         return null;
     }
 }
