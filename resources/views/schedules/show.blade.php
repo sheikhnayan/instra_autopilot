@@ -113,7 +113,7 @@
                         
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Start Time</label>
-                            <div class="mt-1 text-gray-900">{{ $schedule->start_time ? $schedule->start_time->format('g:i A') : 'N/A' }}</div>
+                            <div class="mt-1 text-gray-900">{{ $schedule->start_time ? \Carbon\Carbon::parse($schedule->start_time)->format('g:i A') : 'N/A' }}</div>
                         </div>
                         
                         <div>
