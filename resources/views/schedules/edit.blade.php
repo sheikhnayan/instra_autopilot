@@ -1,10 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Edit Schedule - So                              <input type="time" id="start_time" name="start_time" required
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                   value="{{ old('start_time', $schedule->start_time ? \Carbon\Carbon::parse($schedule->start_time)->format('H:i') : '') }}">                       <input type="time" id="start_time" name="start_time" required
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                   value="{{ old('start_time', $schedule->start_time ? \Carbon\Carbon::parse($schedule->start_time)->format('H:i') : '') }}">lScheduler')
+@section('title', 'Edit Schedule - SocialScheduler')
 @section('header', 'Edit Schedule')
 
 @section('content')
