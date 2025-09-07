@@ -111,7 +111,7 @@ class ProcessScheduledPosts extends Command
         
         // If never posted before, check if start time has passed
         if (!$schedule->last_posted_at) {
-            $startDateTime = $schedule->start_date->format('Y-m-d') . ' ' . $schedule->start_time->format('H:i:s');
+            $startDateTime = $schedule->start_date->format('Y-m-d') . ' ' . $schedule->start_time;
             $startDateTime = Carbon::createFromFormat('Y-m-d H:i:s', $startDateTime, $ny_tz);
             
             $this->info("Start time: {$startDateTime->format('Y-m-d H:i:s T')} | Current time: {$now->format('Y-m-d H:i:s T')}");
