@@ -34,7 +34,6 @@ class ScheduleController extends Controller
             'name' => 'required|max:255',
             'content_container_id' => 'required|exists:content_containers,id',
             'instagram_account_id' => 'required|exists:instagram_accounts,id',
-            'start_date' => 'required|date|after_or_equal:today',
             'start_time' => 'required',
             'interval_minutes' => 'required|integer|min:15|max:1440',
             'repeat_cycle' => 'boolean'
