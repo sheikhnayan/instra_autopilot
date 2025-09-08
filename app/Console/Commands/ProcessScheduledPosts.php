@@ -84,10 +84,10 @@ class ProcessScheduledPosts extends Command
                     $nextPost
                 );
                 
-                // Update schedule's last posted time and increment post index
+                // Update schedule's last posted time and set current index to this post's order
                 $schedule->update([
                     'last_posted_at' => now(),
-                    'current_post_index' => ($schedule->current_post_index ?? 0) + 1
+                    'current_post_index' => $nextPost->order
                 ]);
                 
                 $this->info("✓ Schedule ID: {$schedule->id} - Post ID: {$nextPost->id} dispatched successfully");
@@ -137,16 +137,26 @@ class ProcessScheduledPosts extends Command
             ->orderBy('order')
             ->get();
             
+        // Get posts by status
+        $draftPosts = $allPosts->where('status', 'draft');
+        $postedPosts = $allPosts->whereIn('status', ['posted', 'failed']);
+        $scheduledPosts = $allPosts->where('status', 'scheduled');
+        
+        $this->info("Status check - Total: {$allPosts->count()}, Completed: {$postedPosts->count()}, Scheduled: {$scheduledPosts->count()}, Draft: {$draftPosts->count()}");
+        
+        // Use the schedule's current_post_index to get the EXACT next post by order
         $currentIndex = $schedule->current_post_index ?? 0;
         
-        // Get available posts (draft status only - not scheduled, posted, or failed)
-        $availablePosts = $allPosts->where('status', 'draft');
+        // Get the post at the specific index position (by order)
+        $nextPost = $allPosts->where('order', '>=', $currentIndex + 1)->where('status', 'draft')->first();
         
-        // Get the next post based on current index from available posts
-        $nextPost = $availablePosts->skip($currentIndex)->first();
+        if (!$nextPost) {
+            // If no post found at current index, try to find the next available draft post
+            $nextPost = $draftPosts->first();
+        }
         
         if ($nextPost) {
-            $this->info("Found next post to schedule: ID {$nextPost->id} (index: {$currentIndex})");
+            $this->info("Found next post to schedule: ID {$nextPost->id} (order: {$nextPost->order}, current_index: {$currentIndex})");
             return $nextPost;
         }
         
@@ -159,34 +169,35 @@ class ProcessScheduledPosts extends Command
         $this->info("Status check - Total: {$totalPosts}, Completed: {$completedPosts}, Scheduled: {$scheduledPosts}, Draft: {$draftPosts}");
         
         // If there are still draft posts available, something is wrong with the index logic
-        if ($draftPosts > 0) {
-            $this->info("Found {$draftPosts} draft posts but couldn't get next post. Resetting index to 0.");
-            $schedule->update(['current_post_index' => 0]);
+        if ($draftPosts->count() > 0) {
+            $this->info("Found {$draftPosts->count()} draft posts but couldn't get next post. Resetting index to find correct post.");
             
-            // Try to get the first draft post
-            $firstDraftPost = $availablePosts->first();
-            if ($firstDraftPost) {
-                return $firstDraftPost;
+            // Find the next post in sequence that's still draft
+            $nextInSequence = $allPosts->where('status', 'draft')->sortBy('order')->first();
+            if ($nextInSequence) {
+                // Update index to be one less than the found post's order (since it will be incremented)
+                $schedule->update(['current_post_index' => $nextInSequence->order - 1]);
+                return $nextInSequence;
             }
         }
         
         // If all posts have been processed (posted/failed) and no repeat cycle, mark as completed
-        if ($draftPosts == 0 && $completedPosts >= $totalPosts && !$schedule->repeat_cycle) {
+        if ($draftPosts->count() == 0 && $postedPosts->count() >= $allPosts->count() && !$schedule->repeat_cycle) {
             $this->info("All posts processed for schedule ID: {$schedule->id}. Marking as completed.");
             $schedule->update(['status' => 'completed']);
             return null;
         }
         
         // If repeat cycle is enabled and no draft posts remain, reset all posts to draft
-        if ($schedule->repeat_cycle && $draftPosts == 0) {
+        if ($schedule->repeat_cycle && $draftPosts->count() == 0) {
             $this->info("Repeat cycle enabled for schedule ID: {$schedule->id}. Resetting all posts to draft and starting over.");
             
             // Reset all posts back to draft status for repeat cycle
             $schedule->contentContainer->posts()->update(['status' => 'draft']);
             $schedule->update(['current_post_index' => 0]);
             
-            // Get the first post after reset
-            return $schedule->contentContainer->posts()->orderBy('order')->first();
+            // Get the first post after reset (by order)
+            return $allPosts->sortBy('order')->first();
         }
         
         // If there are still posts being scheduled/processed, wait

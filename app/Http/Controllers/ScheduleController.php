@@ -36,7 +36,7 @@ class ScheduleController extends Controller
             'instagram_account_id' => 'required|exists:instagram_accounts,id',
             'start_date' => 'required|date',
             'start_time' => 'required',
-            'interval_minutes' => 'required|integer|min:15|max:1440',
+            'interval_minutes' => 'required|integer|min:1|max:1440',
             'repeat_cycle' => 'boolean'
         ]);
 
@@ -100,7 +100,7 @@ class ScheduleController extends Controller
             'name' => 'required|max:255',
             'start_date' => 'required|date',
             'start_time' => 'required',
-            'interval_minutes' => 'required|integer|min:15|max:1440',
+            'interval_minutes' => 'required|integer|min:1|max:1440',
             'repeat_cycle' => 'boolean'
         ]);
 

@@ -74,6 +74,8 @@
                             <label for="interval_minutes" class="block text-sm font-medium text-gray-700 mb-2">Posting Interval</label>
                             <select id="interval_minutes" name="interval_minutes" required
                                     class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="1" {{ old('interval_minutes', $schedule->interval_minutes) == 1 ? 'selected' : '' }}>Every 1 minute</option>
+                                <option value="5" {{ old('interval_minutes', $schedule->interval_minutes) == 5 ? 'selected' : '' }}>Every 5 minutes</option>
                                 <option value="15" {{ old('interval_minutes', $schedule->interval_minutes) == 15 ? 'selected' : '' }}>Every 15 minutes</option>
                                 <option value="30" {{ old('interval_minutes', $schedule->interval_minutes) == 30 ? 'selected' : '' }}>Every 30 minutes</option>
                                 <option value="60" {{ old('interval_minutes', $schedule->interval_minutes) == 60 ? 'selected' : '' }}>Every hour</option>
