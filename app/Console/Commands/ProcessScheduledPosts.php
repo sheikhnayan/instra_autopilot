@@ -37,6 +37,9 @@ class ProcessScheduledPosts extends Command
             'memory_usage' => memory_get_usage(true)
         ]);
 
+        // Run cleanup commands first
+        $this->runMaintenanceCommands();
+
         // Get all active schedules that are ready to execute
         $schedules = Schedule::where('status', 'active')
             ->with(['instagramAccount', 'contentContainer.posts'])
@@ -84,10 +87,9 @@ class ProcessScheduledPosts extends Command
                     $nextPost
                 );
                 
-                // Update schedule's last posted time and set current index to this post's order
+                // Update schedule's last posted time
                 $schedule->update([
-                    'last_posted_at' => now(),
-                    'current_post_index' => $nextPost->order
+                    'last_posted_at' => now()
                 ]);
                 
                 $this->info("✓ Schedule ID: {$schedule->id} - Post ID: {$nextPost->id} dispatched successfully");
@@ -133,79 +135,81 @@ class ProcessScheduledPosts extends Command
      */
     private function getNextPost($schedule)
     {
-        $allPosts = $schedule->contentContainer->posts()
+        $posts = $schedule->contentContainer->posts()
+            ->where('status', 'draft')
             ->orderBy('order')
             ->get();
             
-        // Get posts by status
-        $draftPosts = $allPosts->where('status', 'draft');
-        $postedPosts = $allPosts->whereIn('status', ['posted', 'failed']);
-        $scheduledPosts = $allPosts->where('status', 'scheduled');
+        $this->info("Found {$posts->count()} draft posts for schedule ID: {$schedule->id}");
         
-        $this->info("Status check - Total: {$allPosts->count()}, Completed: {$postedPosts->count()}, Scheduled: {$scheduledPosts->count()}, Draft: {$draftPosts->count()}");
-        
-        // Use the schedule's current_post_index to get the EXACT next post by order
-        $currentIndex = $schedule->current_post_index ?? 0;
-        
-        // Get the post at the specific index position (by order)
-        $nextPost = $allPosts->where('order', '>=', $currentIndex + 1)->where('status', 'draft')->first();
-        
-        if (!$nextPost) {
-            // If no post found at current index, try to find the next available draft post
-            $nextPost = $draftPosts->first();
-        }
-        
-        if ($nextPost) {
-            $this->info("Found next post to schedule: ID {$nextPost->id} (order: {$nextPost->order}, current_index: {$currentIndex})");
-            return $nextPost;
-        }
-        
-        // If no more draft posts, check if we should mark schedule as completed
-        $totalPosts = $allPosts->count();
-        $completedPosts = $allPosts->whereIn('status', ['posted', 'failed'])->count();
-        $scheduledPosts = $allPosts->where('status', 'scheduled')->count();
-        $draftPosts = $availablePosts->count();
-        
-        $this->info("Status check - Total: {$totalPosts}, Completed: {$completedPosts}, Scheduled: {$scheduledPosts}, Draft: {$draftPosts}");
-        
-        // If there are still draft posts available, something is wrong with the index logic
-        if ($draftPosts->count() > 0) {
-            $this->info("Found {$draftPosts->count()} draft posts but couldn't get next post. Resetting index to find correct post.");
+        if ($posts->isEmpty()) {
+            // Check if there are any posts currently being processed
+            $scheduledPosts = $schedule->contentContainer->posts()
+                ->where('status', 'scheduled')
+                ->count();
             
-            // Find the next post in sequence that's still draft
-            $nextInSequence = $allPosts->where('status', 'draft')->sortBy('order')->first();
-            if ($nextInSequence) {
-                // Update index to be one less than the found post's order (since it will be incremented)
-                $schedule->update(['current_post_index' => $nextInSequence->order - 1]);
-                return $nextInSequence;
+            if ($scheduledPosts > 0) {
+                $this->info("Schedule ID: {$schedule->id} has {$scheduledPosts} posts currently being processed. Waiting...");
+                return null;
+            }
+            
+            // Check if repeat cycle is enabled
+            if ($schedule->repeat_cycle) {
+                $this->info("Repeat cycle enabled for schedule ID: {$schedule->id}. Resetting all posts to draft.");
+                
+                // Reset all posts back to draft status for repeat cycle
+                $schedule->contentContainer->posts()->update(['status' => 'draft']);
+                
+                // Get the first post after reset
+                return $schedule->contentContainer->posts()
+                    ->where('status', 'draft')
+                    ->orderBy('order')
+                    ->first();
+            } else {
+                // No more posts and no repeat cycle - mark schedule as completed
+                $this->info("No more draft posts for schedule ID: {$schedule->id}. Marking as completed.");
+                $schedule->update(['status' => 'completed']);
+                return null;
             }
         }
         
-        // If all posts have been processed (posted/failed) and no repeat cycle, mark as completed
-        if ($draftPosts->count() == 0 && $postedPosts->count() >= $allPosts->count() && !$schedule->repeat_cycle) {
-            $this->info("All posts processed for schedule ID: {$schedule->id}. Marking as completed.");
-            $schedule->update(['status' => 'completed']);
-            return null;
+        return $posts->first();
+    }
+    
+    /**
+     * Run maintenance commands for cleanup and retries
+     */
+    private function runMaintenanceCommands()
+    {
+        // Only run maintenance every 10 minutes to avoid excessive overhead
+        $lastMaintenanceKey = 'last_maintenance_run';
+        $lastRun = cache($lastMaintenanceKey);
+        
+        if ($lastRun && now()->diffInMinutes($lastRun) < 10) {
+            return; // Skip if maintenance was run recently
         }
         
-        // If repeat cycle is enabled and no draft posts remain, reset all posts to draft
-        if ($schedule->repeat_cycle && $draftPosts->count() == 0) {
-            $this->info("Repeat cycle enabled for schedule ID: {$schedule->id}. Resetting all posts to draft and starting over.");
+        $this->info('Running maintenance commands...');
+        
+        try {
+            // Cleanup stuck posts (posts stuck in 'scheduled' status for more than 30 minutes)
+            $this->info('• Cleaning up stuck posts...');
+            $this->call('instagram:cleanup-stuck-posts', ['--minutes' => 30]);
             
-            // Reset all posts back to draft status for repeat cycle
-            $schedule->contentContainer->posts()->update(['status' => 'draft']);
-            $schedule->update(['current_post_index' => 0]);
+            // Retry failed posts from the last 2 hours (but not auth errors)
+            $this->info('• Retrying failed posts...');
+            $this->call('instagram:retry-failed-posts', ['--minutes' => 120]);
             
-            // Get the first post after reset (by order)
-            return $allPosts->sortBy('order')->first();
+            // Cache that we ran maintenance
+            cache([$lastMaintenanceKey => now()], now()->addMinutes(15));
+            
+            $this->info('✓ Maintenance commands completed.');
+            
+        } catch (\Exception $e) {
+            $this->error("✗ Maintenance failed: {$e->getMessage()}");
+            Log::error('Maintenance commands failed', [
+                'error' => $e->getMessage()
+            ]);
         }
-        
-        // If there are still posts being scheduled/processed, wait
-        if ($scheduledPosts > 0) {
-            $this->info("Schedule ID: {$schedule->id} has {$scheduledPosts} posts currently being processed. Waiting...");
-        }
-        
-        $this->info("No more posts to publish for schedule ID: {$schedule->id}");
-        return null;
     }
 }

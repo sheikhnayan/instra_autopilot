@@ -28,6 +28,16 @@ class Kernel extends ConsoleKernel
         $schedule->command('queue:prune-failed --hours=48')
                  ->daily();
                  
+        // Clean up stuck posts every 30 minutes
+        $schedule->command('instagram:cleanup-stuck-posts --minutes=30')
+                 ->everyThirtyMinutes()
+                 ->withoutOverlapping();
+                 
+        // Retry failed posts every hour (for posts that failed in the last 2 hours)
+        $schedule->command('instagram:retry-failed-posts --minutes=120')
+                 ->hourly()
+                 ->withoutOverlapping();
+                 
         // Clear old log files weekly
         $schedule->command('log:clear')
                  ->weekly();

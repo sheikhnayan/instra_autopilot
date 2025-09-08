@@ -21,7 +21,6 @@ return new class extends Migration
             $table->integer('interval_minutes'); // Interval between posts (60 mins, 120 mins, etc.)
             $table->enum('status', ['active', 'paused', 'completed', 'stopped'])->default('active');
             $table->timestamp('last_posted_at')->nullable();
-            $table->integer('current_post_index')->default(0); // Track which post to post next
             $table->boolean('repeat_cycle')->default(true); // Whether to repeat when all posts are done
             $table->timestamps();
         });
