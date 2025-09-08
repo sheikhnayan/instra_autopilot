@@ -78,11 +78,7 @@
                                 </div>
                                 <div class="flex space-x-2">
                                     <button type="button" class="text-sm text-blue-600 hover:text-blue-800" onclick="openEditModal({{ $post->id }}, '{{ addslashes($post->caption) }}', '{{ implode(' ', $post->hashtags ?? []) }}')">Edit</button>
-                                    <form action="{{ route('posts.delete', $post) }}" method="POST" class="inline" onsubmit="return confirm('Are you sure you want to delete this post?')">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="text-sm text-red-600 hover:text-red-800">Delete</button>
-                                    </form>
+                                    <button type="button" class="text-sm text-red-600 hover:text-red-800" onclick="deletePost({{ $post->id }})">Delete</button>
                                 </div>
                             </div>
                         </div>
@@ -98,22 +94,6 @@
                         + Add Post to Container
                     </button>
                     <div id="new-posts-container" class="space-y-4"></div>
-                </div>
-
-                                {{-- @endif --}}
-
-                <!-- Add New Posts -->
-                <div class="mb-8">
-                    <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-medium text-gray-900">Add New Posts</h3>
-                        <button type="button" id="add-post" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
-                            + Add Post
-                        </button>
-                    </div>
-
-                    <div id="new-posts-container" class="space-y-6">
-                        <!-- New posts will be added here dynamically -->
-                    </div>
                 </div>
 
                 <!-- Submit Button -->
@@ -169,6 +149,37 @@
 @push('scripts')
 <script>
 let newPostIndex = 0;
+
+// Delete post function
+function deletePost(postId) {
+    if (confirm('Are you sure you want to delete this post?')) {
+        // Create a temporary form to submit the delete request
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/posts/${postId}`;
+        form.style.display = 'none';
+        
+        // Add CSRF token
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = '_token';
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || 
+                         document.querySelector('input[name="_token"]')?.value;
+        csrfInput.value = csrfToken;
+        form.appendChild(csrfInput);
+        
+        // Add method override for DELETE
+        const methodInput = document.createElement('input');
+        methodInput.type = 'hidden';
+        methodInput.name = '_method';
+        methodInput.value = 'DELETE';
+        form.appendChild(methodInput);
+        
+        // Submit the form
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
 
 function addNewPost() {
     const postHtml = `
