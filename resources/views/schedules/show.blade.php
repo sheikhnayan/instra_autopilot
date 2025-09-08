@@ -67,8 +67,8 @@
                 @if($schedule->last_posted_at)
                 <div class="mt-6 p-4 bg-gray-50 rounded-lg">
                     <p class="text-sm text-gray-600">
-                        <strong>Last Posted:</strong> {{ $schedule->last_posted_at->format('M j, Y \a\t g:i A') }}
-                        ({{ $schedule->last_posted_at->diffForHumans() }})
+                        <strong>Last Posted:</strong> {{ $schedule->getLastPostedTimeNY()->format('M j, Y \a\t g:i A') }}
+                        ({{ $schedule->getLastPostedTimeNY()->diffForHumans() }})
                     </p>
                 </div>
                 @endif
@@ -249,14 +249,14 @@
                     @if($schedule->last_posted_at)
                     <div class="flex justify-between">
                         <span class="text-gray-600">Last Posted</span>
-                        <span class="text-gray-900">{{ $schedule->last_posted_at->diffForHumans() }}</span>
+                        <span class="text-gray-900">{{ $schedule->getLastPostedTimeNY()->diffForHumans() }}</span>
                     </div>
                     @endif
                     
                     @if($schedule->status === 'active' && $schedule->last_posted_at)
                     <div class="flex justify-between">
                         <span class="text-gray-600">Next Post</span>
-                        <span class="text-gray-900">{{ $schedule->last_posted_at->addMinutes($schedule->interval_minutes)->diffForHumans() }}</span>
+                        <span class="text-gray-900">{{ $schedule->getNextPostTime()->diffForHumans() }}</span>
                     </div>
                     @endif
                 </div>

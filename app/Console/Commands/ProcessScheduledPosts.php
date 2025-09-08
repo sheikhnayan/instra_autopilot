@@ -87,9 +87,10 @@ class ProcessScheduledPosts extends Command
                     $nextPost
                 );
                 
-                // Update schedule's last posted time
+                // Update schedule's last posted time (in New York timezone)
+                $nyTimezone = new \DateTimeZone('America/New_York');
                 $schedule->update([
-                    'last_posted_at' => now()
+                    'last_posted_at' => Carbon::now($nyTimezone)
                 ]);
                 
                 $this->info("✓ Schedule ID: {$schedule->id} - Post ID: {$nextPost->id} dispatched successfully");
@@ -123,7 +124,7 @@ class ProcessScheduledPosts extends Command
         
         // Check if enough time has passed since last post
         $lastPosted = Carbon::parse($schedule->last_posted_at)->setTimezone($ny_tz);
-        $nextPostTime = $lastPosted->addMinutes($schedule->interval_minutes);
+        $nextPostTime = $lastPosted->copy()->addMinutes($schedule->interval_minutes);
         
         $this->info("Last posted: {$lastPosted->format('Y-m-d H:i:s T')} | Next post time: {$nextPostTime->format('Y-m-d H:i:s T')} | Current time: {$now->format('Y-m-d H:i:s T')}");
         
