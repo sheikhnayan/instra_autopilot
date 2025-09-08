@@ -16,10 +16,6 @@ class PostToInstagramJob implements ShouldQueue
 
     protected $instagramAccount;
     protected $instagramPost;
-    
-    // Job retry configuration
-    public $tries = 3; // Try up to 3 times
-    public $backoff = [60, 300]; // Wait 1 minute, then 5 minutes between retries
 
     /**
      * Create a new job instance.
@@ -36,20 +32,12 @@ class PostToInstagramJob implements ShouldQueue
     public function handle(InstagramApiService $instagramService): void
     {
         try {
-            Log::info('Starting Instagram post job', [
-                'post_id' => $this->instagramPost->id,
-                'account_id' => $this->instagramAccount->id,
-                'attempt' => $this->attempts()
-            ]);
-            
             // Use Facebook Page access token and Instagram Business Account ID
             $pageAccessToken = $this->instagramAccount->facebook_page_access_token;
             $instagramBusinessAccountId = $this->instagramAccount->instagram_business_account_id;
 
             if (!$pageAccessToken || !$instagramBusinessAccountId) {
-                $errorMessage = 'Missing Facebook Page token or Instagram Business Account ID - please reconnect your account';
-                
-                Log::error('Missing credentials', [
+                Log::error('Missing Facebook Page token or Instagram Business Account ID', [
                     'account_id' => $this->instagramAccount->id,
                     'username' => $this->instagramAccount->username,
                     'has_page_token' => !empty($pageAccessToken),
@@ -58,11 +46,8 @@ class PostToInstagramJob implements ShouldQueue
                 
                 $this->instagramPost->update([
                     'status' => 'failed',
-                    'error_message' => $errorMessage
+                    'error_message' => 'Missing Facebook Page token or Instagram Business Account ID - please reconnect your account'
                 ]);
-                
-                // Don't retry for missing credentials
-                $this->fail(new \Exception($errorMessage));
                 return;
             }
 
@@ -191,7 +176,7 @@ class PostToInstagramJob implements ShouldQueue
             } // End of else block for regular posts
 
             if ($result && isset($result['id'])) {
-                // Success - Post was successfully created on Instagram
+                // Success
                 $this->instagramPost->update([
                     'status' => 'posted',
                     'instagram_media_id' => $result['id'],
@@ -202,44 +187,21 @@ class PostToInstagramJob implements ShouldQueue
                 Log::info('Successfully posted to Instagram', [
                     'post_id' => $this->instagramPost->id,
                     'instagram_media_id' => $result['id'],
-                    'account_username' => $this->instagramAccount->username,
-                    'attempt' => $this->attempts()
+                    'account_username' => $this->instagramAccount->username
                 ]);
 
             } else {
-                // API call didn't return a valid response
-                $errorMessage = 'Instagram API did not return a valid media ID';
-                
-                Log::warning('Instagram API response invalid', [
+                // Failed
+                $this->instagramPost->update([
+                    'status' => 'failed',
+                    'error_message' => 'Failed to post to Instagram - no media ID returned'
+                ]);
+
+                Log::error('Failed to post to Instagram', [
                     'post_id' => $this->instagramPost->id,
                     'account_username' => $this->instagramAccount->username,
-                    'response' => $result,
-                    'attempt' => $this->attempts()
+                    'response' => $result
                 ]);
-                
-                // Check if we should retry or fail permanently
-                if ($this->attempts() >= $this->tries) {
-                    // Final attempt failed
-                    $this->instagramPost->update([
-                        'status' => 'failed',
-                        'error_message' => $errorMessage . ' (after ' . $this->tries . ' attempts)'
-                    ]);
-                    
-                    Log::error('Instagram post failed permanently', [
-                        'post_id' => $this->instagramPost->id,
-                        'account_username' => $this->instagramAccount->username,
-                        'final_response' => $result
-                    ]);
-                } else {
-                    // Will retry, so don't update status to failed yet
-                    Log::info('Will retry Instagram post', [
-                        'post_id' => $this->instagramPost->id,
-                        'attempt' => $this->attempts(),
-                        'max_tries' => $this->tries
-                    ]);
-                    
-                    throw new \Exception($errorMessage);
-                }
             }
 
         } catch (\Exception $e) {
@@ -247,39 +209,15 @@ class PostToInstagramJob implements ShouldQueue
                 'post_id' => $this->instagramPost->id,
                 'account_username' => $this->instagramAccount->username,
                 'error' => $e->getMessage(),
-                'attempt' => $this->attempts(),
                 'trace' => $e->getTraceAsString()
             ]);
 
-            // Check if this is a permanent error that shouldn't be retried
-            $errorMessage = $e->getMessage();
-            $isPermanentError = stripos($errorMessage, 'token') !== false || 
-                               stripos($errorMessage, 'authorization') !== false ||
-                               stripos($errorMessage, 'oauth') !== false ||
-                               stripos($errorMessage, 'expired') !== false ||
-                               stripos($errorMessage, 'invalid credentials') !== false;
+            $this->instagramPost->update([
+                'status' => 'failed',
+                'error_message' => 'Exception: ' . $e->getMessage()
+            ]);
 
-            if ($isPermanentError) {
-                // Don't retry for token/auth issues
-                $this->instagramPost->update([
-                    'status' => 'failed',
-                    'error_message' => 'Authentication error: ' . $errorMessage . ' - please reconnect your account'
-                ]);
-                
-                $this->fail($e);
-                return;
-            }
-            
-            // Check if we've reached max attempts
-            if ($this->attempts() >= $this->tries) {
-                // Final attempt - mark as failed
-                $this->instagramPost->update([
-                    'status' => 'failed',
-                    'error_message' => 'Failed after ' . $this->tries . ' attempts: ' . $errorMessage
-                ]);
-            }
-
-            // Re-throw the exception to trigger job retry if not at max attempts
+            // Re-throw the exception to trigger job retry if needed
             throw $e;
         }
     }

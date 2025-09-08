@@ -37,9 +37,6 @@ class ProcessScheduledPosts extends Command
             'memory_usage' => memory_get_usage(true)
         ]);
 
-        // Run cleanup commands first
-        $this->runMaintenanceCommands();
-
         // Get all active schedules that are ready to execute
         $schedules = Schedule::where('status', 'active')
             ->with(['instagramAccount', 'contentContainer.posts'])
@@ -87,10 +84,9 @@ class ProcessScheduledPosts extends Command
                     $nextPost
                 );
                 
-                // Update schedule's last posted time (in New York timezone)
-                $nyTimezone = new \DateTimeZone('America/New_York');
+                // Update schedule's last posted time
                 $schedule->update([
-                    'last_posted_at' => Carbon::now($nyTimezone)
+                    'last_posted_at' => now()
                 ]);
                 
                 $this->info("✓ Schedule ID: {$schedule->id} - Post ID: {$nextPost->id} dispatched successfully");
@@ -175,42 +171,5 @@ class ProcessScheduledPosts extends Command
         }
         
         return $posts->first();
-    }
-    
-    /**
-     * Run maintenance commands for cleanup and retries
-     */
-    private function runMaintenanceCommands()
-    {
-        // Only run maintenance every 10 minutes to avoid excessive overhead
-        $lastMaintenanceKey = 'last_maintenance_run';
-        $lastRun = cache($lastMaintenanceKey);
-        
-        if ($lastRun && now()->diffInMinutes($lastRun) < 10) {
-            return; // Skip if maintenance was run recently
-        }
-        
-        $this->info('Running maintenance commands...');
-        
-        try {
-            // Cleanup stuck posts (posts stuck in 'scheduled' status for more than 30 minutes)
-            $this->info('• Cleaning up stuck posts...');
-            $this->call('instagram:cleanup-stuck-posts', ['--minutes' => 30]);
-            
-            // Retry failed posts from the last 2 hours (but not auth errors)
-            $this->info('• Retrying failed posts...');
-            $this->call('instagram:retry-failed-posts', ['--minutes' => 120]);
-            
-            // Cache that we ran maintenance
-            cache([$lastMaintenanceKey => now()], now()->addMinutes(15));
-            
-            $this->info('✓ Maintenance commands completed.');
-            
-        } catch (\Exception $e) {
-            $this->error("✗ Maintenance failed: {$e->getMessage()}");
-            Log::error('Maintenance commands failed', [
-                'error' => $e->getMessage()
-            ]);
-        }
     }
 }

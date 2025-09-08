@@ -33,31 +33,4 @@ class Schedule extends Model
     {
         return $this->belongsTo(InstagramAccount::class);
     }
-    
-    /**
-     * Get the next post time in New York timezone
-     */
-    public function getNextPostTime()
-    {
-        if (!$this->last_posted_at) {
-            return null;
-        }
-        
-        return $this->last_posted_at
-            ->setTimezone('America/New_York')
-            ->copy()
-            ->addMinutes($this->interval_minutes);
-    }
-    
-    /**
-     * Get the last posted time in New York timezone
-     */
-    public function getLastPostedTimeNY()
-    {
-        if (!$this->last_posted_at) {
-            return null;
-        }
-        
-        return $this->last_posted_at->setTimezone('America/New_York');
-    }
 }
