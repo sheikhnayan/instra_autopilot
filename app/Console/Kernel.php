@@ -16,7 +16,8 @@ class Kernel extends ConsoleKernel
         $schedule->command('instagram:process-scheduled-posts')
                  ->everyMinute()
                  ->withoutOverlapping()
-                 ->runInBackground();
+                 ->runInBackground()
+                 ->appendOutputTo('/var/www/instra_autopilot/storage/logs/scheduler.log');
                  
         // Proactive token refresh disabled - using long-lived tokens from auth
         // $schedule->job(new \App\Jobs\ProactiveTokenRefreshJob)
