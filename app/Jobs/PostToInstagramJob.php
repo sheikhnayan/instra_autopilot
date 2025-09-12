@@ -27,6 +27,26 @@ class PostToInstagramJob implements ShouldQueue
     }
 
     /**
+     * Get the correct base URL for image generation
+     */
+    private function getBaseUrl()
+    {
+        $appUrl = config('app.url');
+        
+        // If config still shows localhost, force the correct URL
+        if (str_contains($appUrl, 'localhost') || str_contains($appUrl, '127.0.0.1')) {
+            $baseUrl = 'https://bradygg.com';
+            Log::info('Overriding localhost URL', [
+                'config_url' => $appUrl,
+                'override_url' => $baseUrl
+            ]);
+            return $baseUrl;
+        }
+        
+        return $appUrl;
+    }
+
+    /**
      * Execute the job.
      */
     public function handle(InstagramApiService $instagramService): void
@@ -62,11 +82,11 @@ class PostToInstagramJob implements ShouldQueue
                     if (str_starts_with($cleanPath, 'http')) {
                         $imageUrl = $cleanPath;
                     } else {
-                        $imageUrl = config('app.url') . '/' . $cleanPath;
+                        $imageUrl = $this->getBaseUrl() . '/' . $cleanPath;
                     }
                 } elseif ($this->instagramPost->image_path) {
                     $storageUrl = Storage::url($this->instagramPost->image_path);
-                    $imageUrl = config('app.url') . $storageUrl;
+                    $imageUrl = $this->getBaseUrl() . $storageUrl;
                 }
 
                 if (!$imageUrl) {
@@ -118,7 +138,7 @@ class PostToInstagramJob implements ShouldQueue
                     if (str_starts_with($cleanPath, 'http')) {
                         $imageUrls[] = $cleanPath;
                     } else {
-                        $imageUrls[] = config('app.url') . '/' . $cleanPath;
+                        $imageUrls[] = $this->getBaseUrl() . '/' . $cleanPath;
                     }
                 }
 
@@ -142,11 +162,11 @@ class PostToInstagramJob implements ShouldQueue
                     if (str_starts_with($cleanPath, 'http')) {
                         $imageUrl = $cleanPath;
                     } else {
-                        $imageUrl = config('app.url') . '/' . $cleanPath;
+                        $imageUrl = $this->getBaseUrl() . '/' . $cleanPath;
                     }
                 } elseif ($this->instagramPost->image_path) {
                     $storageUrl = Storage::url($this->instagramPost->image_path);
-                    $imageUrl = config('app.url') . $storageUrl;
+                    $imageUrl = $this->getBaseUrl() . $storageUrl;
                 }
 
                 if (!$imageUrl) {
