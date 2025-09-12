@@ -84,10 +84,27 @@ class ContentContainerController extends Controller
             $imagePaths = [];
             $singleImagePath = null;
             
-            // Handle image uploads
+            // Handle image uploads with custom ordering
             if (isset($postData['images']) && is_array($postData['images'])) {
-                foreach ($postData['images'] as $imageIndex => $image) {
-                    if ($image && $image->isValid()) {
+                $imageOrder = [];
+                if (isset($postData['image_order']) && !empty($postData['image_order'])) {
+                    $imageOrder = array_map('intval', explode(',', $postData['image_order']));
+                } else {
+                    // Default order if no custom order specified
+                    $imageOrder = array_keys($postData['images']);
+                }
+                
+                \Log::info('Image processing', [
+                    'original_order' => array_keys($postData['images']),
+                    'custom_order' => $imageOrder,
+                    'images_count' => count($postData['images'])
+                ]);
+                
+                // Process images in the custom order
+                foreach ($imageOrder as $originalIndex) {
+                    if (isset($postData['images'][$originalIndex])) {
+                        $image = $postData['images'][$originalIndex];
+                        if ($image && $image->isValid()) {
                         // Validate image aspect ratio
                         // $validation = $this->validateImageAspectRatio($image);
                         // if (!$validation['valid']) {
@@ -118,6 +135,7 @@ class ContentContainerController extends Controller
                         }
                     }
                 }
+            }
             }
             
             // If no images uploaded, use placeholder

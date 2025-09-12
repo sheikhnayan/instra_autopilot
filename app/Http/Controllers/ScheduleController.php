@@ -33,7 +33,8 @@ class ScheduleController extends Controller
         $request->validate([
             'name' => 'required|max:255',
             'content_container_id' => 'required|exists:content_containers,id',
-            'instagram_account_id' => 'required|exists:instagram_accounts,id',
+            'instagram_account_ids' => 'required|array|min:1',
+            'instagram_account_ids.*' => 'exists:instagram_accounts,id',
             'start_date' => 'required|date',
             'start_time' => 'required',
             'interval_minutes' => 'required|integer|min:1|max:1440',
@@ -59,25 +60,37 @@ class ScheduleController extends Controller
             'request_start_date' => $request->start_date,
             'final_start_date' => $startDate,
             'start_time' => $startTime,
-            'combined' => $startDateTime
+            'combined' => $startDateTime,
+            'account_count' => count($request->instagram_account_ids)
         ]);
         
         $startDateTimeNY = \Carbon\Carbon::createFromFormat('Y-m-d H:i', $startDateTime, $nyTimezone);
 
-        Schedule::create([
-            'name' => $request->name,
-            'content_container_id' => $request->content_container_id,
-            'instagram_account_id' => $request->instagram_account_id,
-            'start_date' => $startDateTimeNY->format('Y-m-d'),
-            'start_time' => $startDateTimeNY->format('H:i:s'),
-            'interval_minutes' => $request->interval_minutes,
-            'repeat_cycle' => $request->boolean('repeat_cycle', true),
-            'status' => 'active',
-            'current_post_index' => 0
-        ]);
+        $createdSchedules = [];
+        
+        // Create a schedule for each selected Instagram account
+        foreach ($request->instagram_account_ids as $accountId) {
+            $schedule = Schedule::create([
+                'name' => $request->name,
+                'content_container_id' => $request->content_container_id,
+                'instagram_account_id' => $accountId,
+                'start_date' => $startDateTimeNY->format('Y-m-d'),
+                'start_time' => $startDateTimeNY->format('H:i:s'),
+                'interval_minutes' => $request->interval_minutes,
+                'repeat_cycle' => $request->boolean('repeat_cycle', true),
+                'status' => 'active'
+            ]);
+            
+            $createdSchedules[] = $schedule;
+        }
 
+        $accountCount = count($createdSchedules);
+        $message = $accountCount === 1 
+            ? 'Schedule created successfully!' 
+            : "Successfully created {$accountCount} schedules for selected accounts!";
+            
         return redirect()->route('schedules.index')
-            ->with('success', 'Schedule created successfully! All times are in New York timezone.');
+            ->with('success', $message . ' All times are in New York timezone.');
     }
 
     public function show(Schedule $schedule)

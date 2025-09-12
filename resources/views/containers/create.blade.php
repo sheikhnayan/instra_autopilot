@@ -132,7 +132,7 @@ function addPost() {
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">Images (Optional)</label>
                     <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center image-upload-area">
-                        <input type="file" multiple accept="image/*" class="hidden" name="posts[${postIndex}][images][]" id="images-${postIndex}">
+                        <input type="file" multiple accept="image/*" class="hidden" name="posts[${postIndex}][images][]" id="images-${postIndex}" onchange="handleImageUpload(this)">
                         <div class="upload-placeholder cursor-pointer" onclick="document.getElementById('images-${postIndex}').click()">
                             <svg class="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
@@ -147,7 +147,12 @@ function addPost() {
                             </div>
                         </div>
                         <div class="image-preview-container hidden">
-                            <div class="grid grid-cols-2 gap-2" id="preview-${postIndex}"></div>
+                            <div class="mb-2">
+                                <p class="text-sm font-medium text-gray-700">📋 Image Order</p>
+                                <p class="text-xs text-gray-500">Drag to reorder images for posting sequence</p>
+                            </div>
+                            <div class="sortable-images grid grid-cols-2 gap-2" id="preview-${postIndex}"></div>
+                            <input type="hidden" name="posts[${postIndex}][image_order]" id="image-order-${postIndex}" value="">
                             <button type="button" class="mt-2 text-sm text-blue-600 hover:text-blue-800 change-images" onclick="document.getElementById('images-${postIndex}').click()">Change Images</button>
                         </div>
                     </div>
@@ -485,6 +490,122 @@ function updateStickerOptions(postIndex, stickerIndex, stickerType) {
 // Remove sticker
 function removeSticker(button) {
     button.closest('.sticker-item').remove();
+}
+
+// Image handling and ordering functionality
+function handleImageUpload(input) {
+    const files = Array.from(input.files);
+    const postIndex = input.id.replace('images-', '');
+    const preview = document.getElementById(`preview-${postIndex}`);
+    const uploadPlaceholder = input.closest('.image-upload-area').querySelector('.upload-placeholder');
+    const previewContainer = input.closest('.image-upload-area').querySelector('.image-preview-container');
+    const orderInput = document.getElementById(`image-order-${postIndex}`);
+    
+    if (files.length > 0) {
+        uploadPlaceholder.classList.add('hidden');
+        previewContainer.classList.remove('hidden');
+        preview.innerHTML = '';
+        
+        // Set initial order
+        const initialOrder = files.map((_, index) => index);
+        orderInput.value = initialOrder.join(',');
+        
+        files.forEach((file, index) => {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const imgElement = document.createElement('div');
+                imgElement.className = 'sortable-image relative bg-gray-100 rounded-lg overflow-hidden cursor-move border-2 border-transparent hover:border-blue-300 transition-colors';
+                imgElement.draggable = true;
+                imgElement.dataset.originalIndex = index;
+                imgElement.innerHTML = `
+                    <img src="${e.target.result}" alt="Preview" class="w-full h-24 object-cover">
+                    <div class="absolute top-1 right-1 bg-black bg-opacity-50 text-white text-xs px-1 rounded">
+                        ${index + 1}
+                    </div>
+                    <div class="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-20 transition-opacity flex items-center justify-center">
+                        <svg class="w-4 h-4 text-white opacity-0 hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path>
+                        </svg>
+                    </div>
+                `;
+                
+                // Add drag event listeners
+                imgElement.addEventListener('dragstart', handleDragStart);
+                imgElement.addEventListener('dragover', handleDragOver);
+                imgElement.addEventListener('drop', handleDrop);
+                imgElement.addEventListener('dragend', handleDragEnd);
+                
+                preview.appendChild(imgElement);
+            };
+            reader.readAsDataURL(file);
+        });
+    } else {
+        uploadPlaceholder.classList.remove('hidden');
+        previewContainer.classList.add('hidden');
+        orderInput.value = '';
+    }
+}
+
+// Drag and drop functionality for image ordering
+let draggedElement = null;
+
+function handleDragStart(e) {
+    draggedElement = this;
+    this.style.opacity = '0.5';
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleDragOver(e) {
+    if (e.preventDefault) {
+        e.preventDefault();
+    }
+    e.dataTransfer.dropEffect = 'move';
+    return false;
+}
+
+function handleDrop(e) {
+    if (e.stopPropagation) {
+        e.stopPropagation();
+    }
+    
+    if (draggedElement !== this) {
+        const preview = this.parentNode;
+        const draggedIndex = Array.from(preview.children).indexOf(draggedElement);
+        const targetIndex = Array.from(preview.children).indexOf(this);
+        
+        if (draggedIndex < targetIndex) {
+            preview.insertBefore(draggedElement, this.nextSibling);
+        } else {
+            preview.insertBefore(draggedElement, this);
+        }
+        
+        updateImageOrder(preview);
+    }
+    
+    return false;
+}
+
+function handleDragEnd(e) {
+    this.style.opacity = '';
+    draggedElement = null;
+}
+
+function updateImageOrder(preview) {
+    const images = preview.querySelectorAll('.sortable-image');
+    const postIndex = preview.id.replace('preview-', '');
+    const orderInput = document.getElementById(`image-order-${postIndex}`);
+    const order = [];
+    
+    images.forEach((img, index) => {
+        const numberBadge = img.querySelector('.absolute.top-1.right-1');
+        numberBadge.textContent = index + 1;
+        order.push(parseInt(img.dataset.originalIndex));
+    });
+    
+    // Store the order in the hidden field
+    orderInput.value = order.join(',');
+    
+    console.log(`Post ${postIndex} image order:`, order);
 }
 </script>
 @endpush
