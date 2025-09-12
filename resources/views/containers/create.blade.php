@@ -132,7 +132,7 @@ function addPost() {
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">Images (Optional)</label>
                     <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center image-upload-area">
-                        <input type="file" multiple accept="image/*" class="hidden" name="posts[${postIndex}][images][]" id="images-${postIndex}" onchange="handleImageUpload(this)">
+                        <input type="file" multiple accept="image/*" class="hidden" name="posts[${postIndex}][images][]" id="images-${postIndex}">
                         <div class="upload-placeholder cursor-pointer" onclick="document.getElementById('images-${postIndex}').click()">
                             <svg class="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
@@ -232,45 +232,6 @@ function updatePostNumbers() {
         const title = item.querySelector('h4');
         title.textContent = `Post ${index + 1}`;
     });
-}
-
-function handleImageUpload(input) {
-    const uploadArea = input.closest('.image-upload-area');
-    const placeholder = uploadArea.querySelector('.upload-placeholder');
-    const previewContainer = uploadArea.querySelector('.image-preview-container');
-    const previewGrid = previewContainer.querySelector('.grid');
-    
-    if (input.files && input.files.length > 0) {
-        // Clear previous previews
-        previewGrid.innerHTML = '';
-        
-        // Show preview container, hide placeholder
-        placeholder.classList.add('hidden');
-        previewContainer.classList.remove('hidden');
-        
-        // Create previews for each file
-        Array.from(input.files).forEach((file, index) => {
-            if (file.type.startsWith('image/')) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const previewDiv = document.createElement('div');
-                    previewDiv.className = 'relative group';
-                    previewDiv.innerHTML = `
-                        <img src="${e.target.result}" class="w-full h-20 object-cover rounded-lg">
-                        <div class="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
-                            <span class="text-white text-xs">${file.name}</span>
-                        </div>
-                    `;
-                    previewGrid.appendChild(previewDiv);
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-    } else {
-        // Show placeholder, hide preview
-        placeholder.classList.remove('hidden');
-        previewContainer.classList.add('hidden');
-    }
 }
 
 // Event delegation for remove buttons
@@ -514,16 +475,19 @@ function handleImageUpload(input) {
             const reader = new FileReader();
             reader.onload = function(e) {
                 const imgElement = document.createElement('div');
-                imgElement.className = 'sortable-image relative bg-gray-100 rounded-lg overflow-hidden cursor-move border-2 border-transparent hover:border-blue-300 transition-colors';
+                imgElement.className = 'sortable-image relative bg-gray-100 rounded-lg overflow-hidden border-2 border-transparent hover:border-blue-300 transition-colors';
                 imgElement.draggable = true;
                 imgElement.dataset.originalIndex = index;
                 imgElement.innerHTML = `
                     <img src="${e.target.result}" alt="Preview" class="w-full h-24 object-cover">
-                    <div class="absolute top-1 right-1 bg-black bg-opacity-50 text-white text-xs px-1 rounded">
+                    <div class="absolute top-1 right-1 bg-black bg-opacity-50 text-white text-xs px-1 rounded z-10">
                         ${index + 1}
                     </div>
-                    <div class="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-20 transition-opacity flex items-center justify-center">
-                        <svg class="w-4 h-4 text-white opacity-0 hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <button type="button" class="remove-image absolute top-1 left-1 bg-red-500 hover:bg-red-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center transition-all duration-200 opacity-80 hover:opacity-100 hover:scale-110 z-20 cursor-pointer" onclick="removeImage(this)">
+                        ×
+                    </button>
+                    <div class="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-20 transition-opacity flex items-center justify-center pointer-events-none">
+                        <svg class="w-4 h-4 text-white opacity-0 hover:opacity-100 transition-opacity pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path>
                         </svg>
                     </div>
@@ -534,6 +498,23 @@ function handleImageUpload(input) {
                 imgElement.addEventListener('dragover', handleDragOver);
                 imgElement.addEventListener('drop', handleDrop);
                 imgElement.addEventListener('dragend', handleDragEnd);
+                
+                // Add cursor handling for different areas
+                imgElement.addEventListener('mouseenter', function() {
+                    this.style.cursor = 'move';
+                });
+                
+                // Prevent dragging when clicking on remove button
+                const removeBtn = imgElement.querySelector('.remove-image');
+                removeBtn.addEventListener('mousedown', function(e) {
+                    e.stopPropagation();
+                });
+                removeBtn.addEventListener('mouseenter', function() {
+                    this.parentElement.style.cursor = 'pointer';
+                });
+                removeBtn.addEventListener('mouseleave', function() {
+                    this.parentElement.style.cursor = 'move';
+                });
                 
                 preview.appendChild(imgElement);
             };
@@ -607,6 +588,74 @@ function updateImageOrder(preview) {
     
     console.log(`Post ${postIndex} image order:`, order);
 }
+
+// Remove specific image from preview
+function removeImage(button) {
+    // Prevent event bubbling
+    event.stopPropagation();
+    event.preventDefault();
+    
+    const imageElement = button.closest('.sortable-image');
+    const preview = imageElement.parentNode;
+    
+    // Add fade out effect before removal
+    imageElement.style.transition = 'opacity 0.3s ease';
+    imageElement.style.opacity = '0';
+    
+    setTimeout(() => {
+        // Remove the image element
+        imageElement.remove();
+        
+        // Update the order and numbering
+        updateImageOrder(preview);
+        
+        // If no images left, show placeholder
+        if (preview.children.length === 0) {
+            const uploadPlaceholder = preview.closest('.image-upload-area').querySelector('.upload-placeholder');
+            const previewContainer = preview.closest('.image-upload-area').querySelector('.image-preview-container');
+            uploadPlaceholder.classList.remove('hidden');
+            previewContainer.classList.add('hidden');
+            
+            // Clear the file input and order
+            const postIndex = preview.id.replace('preview-', '');
+            const fileInput = document.getElementById(`images-${postIndex}`);
+            const orderInput = document.getElementById(`image-order-${postIndex}`);
+            fileInput.value = '';
+            orderInput.value = '';
+        }
+    }, 300);
+}
+
+// Add custom styles for better interaction
+const style = document.createElement('style');
+style.textContent = `
+    .sortable-image {
+        cursor: move !important;
+    }
+    .sortable-image .remove-image {
+        cursor: pointer !important;
+        z-index: 30 !important;
+        pointer-events: auto !important;
+    }
+    .sortable-image .remove-image:hover {
+        transform: scale(1.1);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .sortable-image:hover .remove-image {
+        opacity: 1 !important;
+    }
+`;
+document.head.appendChild(style);
+
+// Event delegation for remove buttons as backup
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('remove-image') || e.target.closest('.remove-image')) {
+        e.preventDefault();
+        e.stopPropagation();
+        const button = e.target.classList.contains('remove-image') ? e.target : e.target.closest('.remove-image');
+        removeImage(button);
+    }
+});
 </script>
 @endpush
 @endsection
